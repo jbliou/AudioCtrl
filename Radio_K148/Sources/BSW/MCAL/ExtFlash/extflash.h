@@ -15,8 +15,7 @@
         , ExtFlash_STATE_RESET
         , ExtFlash_STATE_GET_ID
         , ExtFlash_STATE_GET_STATUS
-        , ExtFlash_STATE_SET_WEL
-        , ExtFlash_STATE_CLR_WEL
+        , ExtFlash_STATE_WEL
         , ExtFlash_STATE_IDLE
         , ExtFlash_STATE_READ
         , ExtFlash_STATE_WRITE
@@ -85,8 +84,7 @@
         void Handle_ExtFlash_RESET(void) ;
         void Handle_ExtFlash_GET_ID(void) ;
         void Handle_ExtFlash_GET_STATUS(void) ;
-        void Handle_ExtFlash_SET_WEL(void) ;
-        void Handle_ExtFlash_CLR_WEL(void) ;
+        void Handle_ExtFlash_WEL(void) ;
         void Handle_ExtFlash_NOP(void) ;
         void Handle_ExtFlash_READ(void) ;
         void Handle_ExtFlash_WRITE(void) ;
@@ -96,6 +94,8 @@
         void Handle_ExtFlash_ERASE_BLOCK_32K(void) ;
         void Handle_ExtFlash_ERASE_BLOCK_64K(void) ;
         void Handle_ExtFlash_ERASE_CHIP(void) ;
+        void Handle_ExtFlash_WEL_CLR(void) ;
+        void Handle_ExtFlash_WEL_SET(void) ;
 
         void SPIMemory_Request_Reset (void) ;
         void SetSPIFlashDriver_state(ExtFlash_STATE new_state) ;
@@ -111,8 +111,7 @@
             , Handle_ExtFlash_RESET             /* ExtFlash_STATE_RESET         */
             , Handle_ExtFlash_GET_ID            /* ExtFlash_STATE_GET_ID        */
             , Handle_ExtFlash_GET_STATUS        /* ExtFlash_STATE_GET_STATUS    */
-            , Handle_ExtFlash_SET_WEL           /* ExtFlash_STATE_SET_WEL       */
-            , Handle_ExtFlash_CLR_WEL           /* ExtFlash_STATE_CLR_WEL       */
+            , Handle_ExtFlash_WEL               /* ExtFlash_STATE_WEL           */
             , Handle_ExtFlash_NOP               /* ExtFlash_STATE_IDLE          */
             , Handle_ExtFlash_READ              /* ExtFlash_STATE_READ          */
             , Handle_ExtFlash_WRITE             /* ExtFlash_STATE_WRITE         */
@@ -120,6 +119,7 @@
         } ;
 
         PFUNC   op_func = (PFUNC)NULL ;
+        PFUNC   wel_func = (PFUNC)NULL ;
 
         #undef  __EXTFLASH_INS__
     #else

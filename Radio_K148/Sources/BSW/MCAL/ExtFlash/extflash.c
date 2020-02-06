@@ -39,7 +39,8 @@ void Handle_ExtFlash (void) {
 #if (0)
                 // Test code
                 if (preg_status->WEL == 0) {
-                    SetSPIFlashDriver_state (ExtFlash_STATE_SET_WEL) ;
+                    SetSPIFlashDriver_state (Handle_ExtFlash_WEL) ;
+                    wel_func = Handle_ExtFlash_WEL_SET ;
                 }
                 else {
                     TimerSet(&timer_extflash, 50) ;
@@ -207,10 +208,10 @@ void Handle_ExtFlashApp_WRITE(void) {
                     extflash_sub_state = 4 ;
                     break ;
                 case 1 :
-                    if (TimerHasExpired(&timer_extflash_status) == TRUE) {
-                        SetSPIFlashDriver_state (ExtFlash_STATE_SET_WEL) ;
-                        extflash_sub_state = 2 ;
-                    }   // if (TimerHasExpired(&timer_extflash_status) == TRUE)
+                    SetSPIFlashDriver_state (ExtFlash_STATE_WEL) ;
+                    wel_func = Handle_ExtFlash_WEL_SET ;
+                    extflash_sub_state = 2 ;
+                    TimerSet(&timer_extflash_status, 10) ;
                     break ;
                 case 2 :
                     if (TimerHasExpired(&timer_extflash) == TRUE) {
@@ -224,8 +225,12 @@ void Handle_ExtFlashApp_WRITE(void) {
                         }   // if (TimerHasExpired(&timer_extflash_status) == TRUE)
                     }
                     else if (preg_status->WEL == 0) {
-                        extflash_sub_state = 1 ;
-                        TimerSet(&timer_extflash_status, 10) ;
+                        if (pSPIMemory->index >= pSPIMemory->len) {
+                            extflash_sub_state = 6 ;
+                        }   // if (pSPIMemory->index >= pSPIMemory->len)
+                        else {
+                            extflash_sub_state = 1 ;
+                        }
                     }
                     else {
                         extflash_sub_state = 3 ;
@@ -233,16 +238,26 @@ void Handle_ExtFlashApp_WRITE(void) {
                     break ;
                 case 3 :
                     if (pSPIMemory->index >= pSPIMemory->len) {
-                        extflash_sub_state = 5 ;
+                        if (preg_status->WEL == 0) {
+                            extflash_sub_state = 6 ;
+                        }
+                        else {
+                            extflash_sub_state = 5 ;
+                        }
                     }
                     else {
                         SetSPIFlashDriver_state (ExtFlash_STATE_WRITE) ;
-                        extflash_sub_state = 4 ;
+                        extflash_sub_state = 2 ;
                     }
                     break ;
                 case 4 :
                     if (pSPIMemory->index >= pSPIMemory->len) {
-                        extflash_sub_state = 5 ;
+                        if (preg_status->WEL == 0) {
+                            extflash_sub_state = 6 ;
+                        }
+                        else {
+                            extflash_sub_state = 5 ;
+                        }
                     }
                     else {
                         TimerStop(&timer_extflash) ;
@@ -254,7 +269,8 @@ void Handle_ExtFlashApp_WRITE(void) {
                     }
                     break ;
                 case 5 :
-                    SetSPIFlashDriver_state (ExtFlash_STATE_CLR_WEL) ;
+                    SetSPIFlashDriver_state (ExtFlash_STATE_WEL) ;
+                    wel_func = Handle_ExtFlash_WEL_CLR ;
                     extflash_sub_state = 6 ;
                     break ;
                 default:
@@ -291,7 +307,8 @@ void Handle_ExtFlashApp_ERASE(void) {
                     }   // if (preg_status->WEL == 1)
                     break ;
                 case 2 :
-                    SetSPIFlashDriver_state (ExtFlash_STATE_SET_WEL) ;
+                    SetSPIFlashDriver_state (ExtFlash_STATE_WEL) ;
+                    wel_func = Handle_ExtFlash_WEL_SET ;
                     extflash_sub_state = 1 ;
                     break ;
                 case 3 :
@@ -310,8 +327,12 @@ void Handle_ExtFlashApp_ERASE(void) {
                             SetSPIFlashDriver_state (ExtFlash_STATE_GET_STATUS) ;
                             TimerSet(&timer_extflash_status, 20) ;
                         }
-                    } else {
-                        SetSPIFlashDriver_state (ExtFlash_STATE_CLR_WEL) ;
+                    }
+                    else if (preg_status->WEL == 1) {
+                        SetSPIFlashDriver_state (ExtFlash_STATE_WEL) ;
+                        wel_func = Handle_ExtFlash_WEL_CLR ;
+                    }
+                    else {
                         extflash_sub_state = 5 ;
                     }
                     break ;
@@ -362,14 +383,20 @@ void Handle_ExtFlash_RESET(void) {
                 break ;
             case 2 :
                 extflash_cmd_buf [0] = W25Q32JV_CMD_Enable_Reset ;
-                SPIAccess(extflash_cmd_buf, extflash_cmd_buf, 1) ;
+                SPIAccess(extflash_cmd_buf
+                        , extflash_cmd_buf
+                        , 1
+                        ) ;
                 drv_extflash_sub_state = 3 ;
                 break ;
             case 3 :
                 TimerStop(&drv_timer_extflash) ;     //
 
                 extflash_cmd_buf [0] = W25Q32JV_CMD_Reset_Device ;
-                SPIAccess(extflash_cmd_buf, extflash_cmd_buf, 1) ;
+                SPIAccess(extflash_cmd_buf
+                        , extflash_cmd_buf
+                        , 1
+                        ) ;
                 drv_extflash_sub_state = 4 ;
 
                 TimerSet(&drv_timer_extflash, 15) ;     //
@@ -394,7 +421,9 @@ void Handle_ExtFlash_GET_ID(void) {
             case 0 :    // Send Read ID command
                 memset(extflash_cmd_buf, 0, 6) ;
                 extflash_cmd_buf [0] = W25Q32JV_CMD_MANUFACTURER_ID ;
-                SPIAccess(extflash_cmd_buf, extflash_cmd_buf, 6) ;
+                SPIAccess(extflash_cmd_buf
+                        , extflash_cmd_buf
+                        , 6) ;
                 drv_extflash_sub_state = 1 ;
                 break ;
             case 1 :    // Store Manufacturer and Device ID, than transfer to Get Status state
@@ -419,7 +448,10 @@ void Handle_ExtFlash_GET_STATUS(void) {
             case 1 :    // Send Read Status_Reg1
                 memset(extflash_cmd_buf, 0, 2) ;
                 extflash_cmd_buf [0] = W25Q32JV_CMD_Read_Status_Register_1 ;
-                SPIAccess(extflash_cmd_buf, extflash_cmd_buf, 2) ;
+                SPIAccess(extflash_cmd_buf
+                        , extflash_cmd_buf
+                        , 2
+                        ) ;
                 drv_extflash_sub_state = 2 ;
                 break ;
             case 2 :    // Send Read Status_Reg2, , store Status_Reg1
@@ -429,7 +461,10 @@ void Handle_ExtFlash_GET_STATUS(void) {
 
                 memset(extflash_cmd_buf, 0, 2) ;
                 extflash_cmd_buf [0] = W25Q32JV_CMD_Read_Status_Register_2 ;
-                SPIAccess(extflash_cmd_buf, extflash_cmd_buf, 2) ;
+                SPIAccess(extflash_cmd_buf
+                        , extflash_cmd_buf
+                        , 2
+                        ) ;
                 drv_extflash_sub_state = 3 ;
                 break ;
             case 3 :    // Send Read Status_Reg3, store Status_Reg2
@@ -439,7 +474,10 @@ void Handle_ExtFlash_GET_STATUS(void) {
 
                 memset(extflash_cmd_buf, 0, 2) ;
                 extflash_cmd_buf [0] = W25Q32JV_CMD_Read_Status_Register_3 ;
-                SPIAccess(extflash_cmd_buf, extflash_cmd_buf, 2) ;
+                SPIAccess(extflash_cmd_buf
+                        , extflash_cmd_buf
+                        , 2
+                        ) ;
                 drv_extflash_sub_state = 4 ;
                 break ;
             case 4 :    // Store Status_Reg3
@@ -455,15 +493,18 @@ void Handle_ExtFlash_GET_STATUS(void) {
     }   // if (GetSPIState() != STATUS_BUSY)
 }   // void Handle_ExtFlash_GET_STATUS(void)
 
-void Handle_ExtFlash_CLR_WEL(void) {
-    if (GetSPIState() != STATUS_BUSY) {
+void Handle_ExtFlash_WEL(void) {
+    if (wel_func == (PFUNC)NULL) {
+        SetSPIFlashDriver_state (ExtFlash_STATE_IDLE) ;
+    }   // if (op_func == (PFUNC)NULL)
+    else if (GetSPIState() != STATUS_BUSY) {
         SetSPIFree() ;
         switch (drv_extflash_sub_state) {
             case 0 :
                 drv_extflash_sub_state = 1 ;
                 break ;
             case 1 :
-                extflash_cmd_buf [0] = W25Q32JV_CMD_WRITE_DISABLE ;
+                wel_func () ;
                 SPIAccess(extflash_cmd_buf
                         , extflash_cmd_buf
                         , 1
@@ -471,33 +512,20 @@ void Handle_ExtFlash_CLR_WEL(void) {
                 drv_extflash_sub_state = 2 ;
                 break ;
             default :
+                wel_func = (PFUNC)NULL ;
                 SetSPIFlashDriver_state (ExtFlash_STATE_GET_STATUS) ;
                 break ;
         }   // switch (drv_extflash_sub_state)
     }   // if (GetSPIState() != STATUS_BUSY)
-}   // void Handle_ExtFlash_CLR_WEL(void)
+}   // void Handle_ExtFlash_WEL(void)
 
-void Handle_ExtFlash_SET_WEL(void) {
-    if (GetSPIState() != STATUS_BUSY) {
-        SetSPIFree() ;
-        switch (drv_extflash_sub_state) {
-            case 0 :
-                drv_extflash_sub_state = 1 ;
-                break ;
-            case 1 :
-                extflash_cmd_buf [0] = W25Q32JV_CMD_WRITE_ENABLE ;
-                SPIAccess(extflash_cmd_buf
-                        , extflash_cmd_buf
-                        , 1
-                        ) ;
-                drv_extflash_sub_state = 2 ;
-                break ;
-            default :
-                SetSPIFlashDriver_state (ExtFlash_STATE_GET_STATUS) ;
-                break ;
-        }   // switch (drv_extflash_sub_state)
-    }   // if (GetSPIState() != STATUS_BUSY)
-}   // void Handle_ExtFlash_SET_WEL(void)
+void Handle_ExtFlash_WEL_CLR(void) {
+    extflash_cmd_buf [0] = W25Q32JV_CMD_WRITE_DISABLE ;
+}   // void Handle_ExtFlash_WEL_CLR(void)
+
+void Handle_ExtFlash_WEL_SET(void) {
+    extflash_cmd_buf [0] = W25Q32JV_CMD_WRITE_ENABLE ;
+}   // void Handle_ExtFlash_WEL_SET(void)
 
 void Handle_ExtFlash_NOP(void) {
 }   //void Handle_ExtFlash_NOP(void)
@@ -549,8 +577,8 @@ void Handle_ExtFlash_READ(void) {
                 break ;
             default :
                 SPIMemory_Request_Reset() ;
-                //SetSPIFlashDriver_state (ExtFlash_STATE_IDLE) ;
-                SetSPIFlashDriver_state (ExtFlash_STATE_GET_STATUS) ;
+                SetSPIFlashDriver_state (ExtFlash_STATE_IDLE) ;
+                //SetSPIFlashDriver_state (ExtFlash_STATE_GET_STATUS) ;
                 break ;
         }   // switch (drv_extflash_sub_state)
     }   // if (GetSPIState() != STATUS_BUSY)
@@ -580,7 +608,7 @@ void Handle_ExtFlash_WRITE(void) {
                 idx = tmp.rw_address & (uint32_t)(0xffU) ;
                 for (idx1 = 4; tar < src && idx < MAX_BYTES_PER_PAGE; idx++, idx1++, tar++) {
                     extflash_buf[idx1] = *ptar++ ;
-                }   // for (; tar < src && idx < (MAX_BYTES_PER_PAGE + 4); idx++, tar++)
+                }   // for (idx1 = 4; tar < src && idx < MAX_BYTES_PER_PAGE; idx++, idx1++, tar++)
 
                 pSPIMemory->index = tar ;
                 SPIAccess(extflash_buf
