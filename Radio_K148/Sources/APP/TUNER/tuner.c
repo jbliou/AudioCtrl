@@ -37,7 +37,7 @@ void Handle_TUNER(void) {
                     TimerStop(&tmr_tuner) ;
                     state_tuner = TUNER_STATE_BOOT ;
                 }
-                if (TimerHasExpired(&tmr_tuner) == TRUE) {
+                else if (TimerHasExpired(&tmr_tuner) == TRUE) {
                     state_tuner = TUNER_STATE_GET_POWERON_STATE ;
                 }
                 break ;
