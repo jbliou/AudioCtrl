@@ -1,7 +1,7 @@
 /*
  * GPS.h
  *
- *  Created on: 2020¦~1¤ë6¤é
+ *  Created on: 2020ï¿½~1ï¿½ï¿½6ï¿½ï¿½
  *      Author: ALLGO
  */
 
@@ -52,13 +52,24 @@
         GPS_HANDLE_STATE_MAX
     } GPS_HANDLE_STATE ;
 
+    typedef enum {
+        ZIP_HANDLE_STATE_WAIT       = 0
+        , ZIP_HANDLE_STATE_CHECK_NEW_GEOHASH
+        , ZIP_HANDLE_STATE_LOAD_BOUNDRY
+        , ZIP_HANDLE_STATE_FIND_NEW_BOUNDRY
+        , ZIP_HANDLE_STATE_LOAD_ZIP_DATA
+        , ZIP_HANDLE_STATE_GET_ZIP_DATA
+        , ZIP_HANDLE_STATE_WAIT_LOADING_PROCESS
+        , ZIP_HANDLE_STATE_MAX
+    } ZIP_HANDLE_STATE ;
+
     typedef void (* GPS_Process)(void) ;
 
     #if defined(__GPS_INS__)
-        uint8_t                 Tmr_GPS = 0 ;
         SGPS_TIME               system_time ;
         UART_STATE              FiltState = STATE_FILT_STAGE1 ;
         GPS_HANDLE_STATE        gps_handle_state = GPS_HANDLE_STATE_INIT ;
+        ZIP_HANDLE_STATE        find_zip_state = ZIP_HANDLE_STATE_WAIT ;
 
         #if (NMEA_FILTER == NMEA_FORMAT_xxGGA)
             const uint8_t       gps_header [] = "$GNGGA" ;
@@ -88,9 +99,15 @@
         int                     nmea_comma_posn [2][20] = {0,} ;
         int                     nmea_comma_posn_idx ;
         double                  GPS_Lat_point, GPS_Lon_point ;
-        int                     geohash_code ;
+        int                     geohash_code = 0 ;
         int                     geohash_code_old = 0 ;
+        uint32_t                zip_code = 0 ;
+        uint32_t                geohash_boundry_l = 0 ;
+        uint32_t                geohash_boundry_m = 0 ;
+        uint32_t                geohash_boundry_h = 0 ;
+        uint32_t                geohash_prefix = 0 ;
         char                    hash[6] ;
+        uint8_t                 flag_zip = 0 ;
 
         void UartDataFilterByte (uint8_t rx_data) ;
 
@@ -102,6 +119,7 @@
         void Handle_GPS_FIND_DATE(void) ;
         void Handle_GPS_FIND_TIME (void) ;
         void Handle_GPS_RESET (void) ;
+        void Handle_find_zip(void) ;
 
         #undef __GPS_INS__
     #else

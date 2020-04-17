@@ -8,7 +8,10 @@
 #ifndef RADIO_TEF668X_H_
     #define RADIO_TEF668X_H_
 
-    #define MAX_TEF668x_BUF                     (20U)
+    //#define TEF668x_API_DEBUG                 0
+    #define TEF668x_API_DEBUG                   1
+
+    #define MAX_TEF668x_BUF                     (0x20U)
 
     #define GPIO_PULL_DOWN                      (0U)
     #define GPIO_PULL_UP                        (1U)
@@ -17,18 +20,56 @@
     //#define TEF668x_GPIO_2_TYPE                 (GPIO_PULL_UP)
 
     #if (TEF668x_GPIO_2_TYPE == GPIO_PULL_DOWN)
-        //#define I2C_ADDRESS_TEF668x             (0x64U)
         #define I2C_ADDRESS_TEF668x             (0x64U)
     #elif (TEF668x_GPIO_2_TYPE == GPIO_PULL_UP)
-        //#define I2C_ADDRESS_TEF668x             (0x65U)
         #define I2C_ADDRESS_TEF668x             (0x65U)
     #endif
 
+    //#define PATCH_VERSION                       (116U)
+    //#define PATCH_VERSION                       (119U)
+    //#define PATCH_VERSION                       (209U)
+    //#define PATCH_VERSION                       (212U)
+    //#define PATCH_VERSION                       (213U)
+    //#define PATCH_VERSION                       (215U)
+    //#define PATCH_VERSION                       (217U)
+    //#define PATCH_VERSION                       (224U)
+    #define PATCH_VERSION                       (512U)
+
+    //#define REF_CLOCK                           4000000
+    //#define REF_CLOCK                           9216000
+    #define REF_CLOCK                           12000000
+
+    #define MAX_TYNER_QUEUE_BUF                 16
+
+    //------------please refer to GUI--------------------------
+    #define TEF668X_SPLIT_SIZE                  (24U)
+
+    #define INIT_FLAG_TIMER                     (0xffU)
+    #define INIT_FLAG_PATCH1                    (0xfeU)
+    #define INIT_FLAG_PATCH2                    (0xfdU)
+
     typedef enum {
-        TEF668x_Module_Radio_FM                 = (32U) ,
-        TEF668x_Module_Radio_AM                 = (33U) ,
-        TEF668x_Module_Audio                    = (48U) ,
-        TEF668x_Module_APPL                     = (64U)
+        TEF668x_BOOT_STATE_START_STAGE
+        , TEF668x_BOOT_STATE_INIT_STAGE
+        , TEF668x_BOOT_STATE_WAITFOR_TIMEOUT_STAGE
+        , TEF668x_BOOT_STATE_LOAD_PATCH_DATA_STAGE
+    } TEF668x_BOOT_STATE ;
+
+    typedef enum {
+        TEF668x_STATE_WAIT_POWERON
+        , TEF668x_STATE_CHECK_POWERON
+        , TEF668x_STATE_CHECK_POWERON_BEGIN
+        , TEF668x_STATE_CHECK_POWERON_END
+        , TEF668x_STATE_BOOT
+        , TEF668x_STATE_STANDBY
+        , TEF668x_STATE_ACCESS_SERVICE
+    } TEF668x_STATE ;
+
+    typedef enum {
+        TEF668x_Module_Radio_FM                 = (32U)
+        , TEF668x_Module_Radio_AM               = (33U)
+        , TEF668x_Module_Audio                  = (48U)
+        , TEF668x_Module_APPL                   = (64U)
     } TEF668x_Module ;
 
     typedef enum {
@@ -50,6 +91,8 @@
         TEF668x_cmd_Set_DigitalRadio            = (30U) ,
         TEF668x_cmd_Set_Deemphasis              = (31U) ,
         TEF668x_cmd_Set_StereoImprovement       = (32U) ,
+        TEF668x_cmd_Set_Highcut_Fix             = (33U) ,
+        TEF668x_cmd_Set_Lowcut_Fix              = (34U) ,
         TEF668x_cmd_Set_LevelStep               = (38U) ,
         TEF668x_cmd_Set_LevelOffset             = (39U) ,
 
@@ -224,13 +267,124 @@
         RDS_PIN_SIGNAL_QSI                      = 2 ,
     } QualityStatus_PIN_SIGNAL_Type ;
 
-    typedef struct {
-        uint8_t                 module ;
-        uint8_t                 cmd ;
-        uint8_t                 index ;
-        uint8_t                 tuning_actions_hi ;
-        uint8_t                 tuning_actions_lo ;
-    } SSetTune_To_End, * PSetTune_To_End ;
+    typedef enum {
+        TEF668X_API_NULL
+        , TEF668X_API_FM_Tune_To
+        , TEF668X_API_FM_Set_Tune_Options
+        , TEF668X_API_FM_Set_Bandwidth
+        , TEF668X_API_FM_Set_RFAGC
+        , TEF668X_API_FM_Set_Antenna
+        , TEF668X_API_FM_Set_MphSuppression
+        , TEF668X_API_FM_Set_ChannelEqualizer
+        , TEF668X_API_FM_Set_NoiseBlanker
+        , TEF668X_API_FM_Set_NoiseBlanker_Options
+        , TEF668X_API_FM_Set_DigitalRadio
+        , TEF668X_API_FM_Set_Deemphasis
+        , TEF668X_API_FM_Set_StereoImprovement
+        , TEF668X_API_FM_Set_Highcut_Fix
+        , TEF668X_API_FM_Set_Lowcut_Fix
+        , TEF668X_API_FM_Set_LevelStep
+        , TEF668X_API_FM_Set_LevelOffset
+        , TEF668X_API_FM_Set_Softmute_Time
+        , TEF668X_API_FM_Set_Softmute_Level
+        , TEF668X_API_FM_Set_Softmute_Noise
+        , TEF668X_API_FM_Set_Softmute_Mph
+        , TEF668X_API_FM_Set_Softmute_Max
+        , TEF668X_API_FM_Set_Highcut_Time
+        , TEF668X_API_FM_Set_Highcut_Mod
+        , TEF668X_API_FM_Set_Highcut_Level
+        , TEF668X_API_FM_Set_Highcut_Noise
+        , TEF668X_API_FM_Set_Highcut_Mph
+        , TEF668X_API_FM_Set_Highcut_Max
+        , TEF668X_API_FM_Set_Highcut_Min
+        , TEF668X_API_FM_Set_Lowcut_Max
+        , TEF668X_API_FM_Set_Lowcut_Min
+        , TEF668X_API_FM_Set_Highcut_Options
+        , TEF668X_API_FM_Set_Stereo_Time
+        , TEF668X_API_FM_Set_Stereo_Mod
+        , TEF668X_API_FM_Set_Stereo_Level
+        , TEF668X_API_FM_Set_Stereo_Noise
+        , TEF668X_API_FM_Set_Stereo_Mph
+        , TEF668X_API_FM_Set_Stereo_Max
+        , TEF668X_API_FM_Set_Stereo_Min
+        , TEF668X_API_FM_Set_StHiBlend_Time
+        , TEF668X_API_FM_Set_StHiBlend_Mod
+        , TEF668X_API_FM_Set_StHiBlend_Level
+        , TEF668X_API_FM_Set_StHiBlend_Noise
+        , TEF668X_API_FM_Set_StHiBlend_Mph
+        , TEF668X_API_FM_Set_StHiBlend_Max
+        , TEF668X_API_FM_Set_StHiBlend_Min
+        , TEF668X_API_FM_Set_Scaler
+        , TEF668X_API_FM_Set_RDS
+        , TEF668X_API_FM_Set_QualityStatus
+        , TEF668X_API_FM_Set_DR_Blend
+        , TEF668X_API_FM_Set_DR_Options
+        , TEF668X_API_FM_Set_Specials
+        , TEF668X_API_FM_Set_Bandwidth_Options
+        , TEF668X_API_FM_Set_StBandBlend_Time
+        , TEF668X_API_FM_Set_StBandBlend_Gain
+        , TEF668X_API_FM_Set_StBandBlend_Bias
+        , TEF668X_API_AM_Set_Tune_To
+        , TEF668X_API_AM_Set_Bandwidth
+        , TEF668X_API_AM_Set_RFAGC
+        , TEF668X_API_AM_Set_Antenna
+        , TEF668X_API_AM_Set_CoChannelDet
+        , TEF668X_API_AM_Set_NoiseBlanker
+        , TEF668X_API_AM_Set_NoiseBlanker_Audio
+        , TEF668X_API_AM_Set_DigitalRadio
+        , TEF668X_API_AM_Set_Highcut_Fix
+        , TEF668X_API_AM_Set_Lowcut_Fix
+        , TEF668X_API_AM_Set_LevelStep
+        , TEF668X_API_AM_Set_LevelOffset
+        , TEF668X_API_AM_Set_Softmute_Time
+        , TEF668X_API_AM_Set_Softmute_Mod
+        , TEF668X_API_AM_Set_Softmute_Level
+        , TEF668X_API_AM_Set_Softmute_Max
+        , TEF668X_API_AM_Set_Highcut_Time
+        , TEF668X_API_AM_Set_Highcut_Mod
+        , TEF668X_API_AM_Set_Highcut_Level
+        , TEF668X_API_AM_Set_Highcut_Noise
+        , TEF668X_API_AM_Set_Highcut_Max
+        , TEF668X_API_AM_Set_Highcut_Min
+        , TEF668X_API_AM_Set_Lowcut_Max
+        , TEF668X_API_AM_Set_Lowcut_Min
+        , TEF668X_API_AM_Set_Scaler
+        , TEF668X_API_AM_Set_QualityStatus
+        , TEF668X_API_AM_Set_DR_Blend
+        , TEF668X_API_AM_Set_DR_Options
+        , TEF668X_API_AM_Set_Specials
+        , TEF668X_API_AUDIO_Set_Volume
+        , TEF668X_API_AUDIO_Set_Mute
+        , TEF668X_API_AUDIO_Set_Input
+        , TEF668X_API_AUDIO_Set_Output_Source
+        , TEF668X_API_AUDIO_Set_Ana_Out
+        , TEF668X_API_AUDIO_Set_Dig_IO
+        , TEF668X_API_AUDIO_Set_Input_Scaler
+        , TEF668X_API_AUDIO_Set_WaveGen
+        , TEF668X_API_APPL_Set_OperationMode
+        , TEF668X_API_APPL_Set_GPIO
+        , TEF668X_API_APPL_Set_ReferenceClock
+        , TEF668X_API_APPL_Activate
+        , TEF668X_API_FM_Get_Quality_Status
+        , TEF668X_API_FM_Get_Quality_Data
+        , TEF668X_API_FM_Get_RDS_Status
+        , TEF668X_API_FM_Get_RDS_Data
+        , TEF668X_API_FM_Get_AGC
+        , TEF668X_API_FM_Get_Signal_Status
+        , TEF668X_API_FM_Get_Processing_Status
+        , TEF668X_API_FM_Get_Interface_Status
+        , TEF668X_API_AM_Get_Quality_Status
+        , TEF668X_API_AM_Get_Quality_Data
+        , TEF668X_API_AM_Get_AGC
+        , TEF668X_API_AM_Get_Signal_Status
+        , TEF668X_API_AM_Get_Processing_Status
+        , TEF668X_API_AM_Get_Interface_Status
+        , TEF668X_API_APPL_Get_Operation_Status
+        , TEF668X_API_APPL_Get_GPIO_Status
+        , TEF668X_API_APPL_Get_Identification
+        , TEF668X_API_APPL_Get_LastWrite
+        , TEF668X_API_APPL_Get_Interface_Status
+    } eTEF668X_API ;
 
     typedef struct {
         uint8_t                 module ;
@@ -302,6 +456,8 @@
         uint8_t                 index ;
         uint8_t                 attenuation_hi ;
         uint8_t                 attenuation_lo ;
+        uint8_t                 off_mode_hi ;
+        uint8_t                 off_mode_lo ;
     } SSet_Antenna, * PSet_Antenna ;
 
     typedef struct {
@@ -343,31 +499,27 @@
         uint8_t                 mode_lo ;
         uint8_t                 sensitivity_hi ;
         uint8_t                 sensitivity_lo ;
-        uint8_t                 reserved_hi ;
-        uint8_t                 reserved_lo ;
-        uint8_t                 modulation_hi ;
-        uint8_t                 modulation_lo ;
-        uint8_t                 offset_hi ;
-        uint8_t                 offset_lo ;
-        uint8_t                 attack_hi ;
-        uint8_t                 attack_lo ;
-        uint8_t                 decay_hi ;
-        uint8_t                 decay_lo ;
-    } SSet_NoiseBlanker_FM, * PSet_NoiseBlanker_FM ;
-
-    typedef struct {
-        uint8_t                 module ;
-        uint8_t                 cmd ;
-        uint8_t                 index ;
-        uint8_t                 mode_hi ;
-        uint8_t                 mode_lo ;
-        uint8_t                 sensitivity_hi ;
-        uint8_t                 sensitivity_lo ;
-        uint8_t                 gain_hi ;
-        uint8_t                 gain_lo ;
-        uint8_t                 blank_time_hi ;
-        uint8_t                 blank_time_lo ;
-    } SSet_NoiseBlanker_AM, * PSet_NoiseBlanker_AM ;
+        union {
+            struct {
+                uint8_t         level_sensitivity_hi ;
+                uint8_t         level_sensitivity_lo ;
+                uint8_t         modulation_hi ;
+                uint8_t         modulation_lo ;
+                uint8_t         offset_hi ;
+                uint8_t         offset_lo ;
+                uint8_t         attack_hi ;
+                uint8_t         attack_lo ;
+                uint8_t         decay_hi ;
+                uint8_t         decay_lo ;
+            } ;
+            struct {
+                uint8_t         gain_hi ;
+                uint8_t         gain_lo ;
+                uint8_t         blank_time_hi ;
+                uint8_t         blank_time_lo ;
+            } ;
+        };
+    } SSet_NoiseBlanker,    * PSet_NoiseBlanker ;
 
     typedef struct {
         uint8_t                 module ;
@@ -379,6 +531,8 @@
         uint8_t                 blank_time2_lo ;
         uint8_t                 blank_modulation_hi ;
         uint8_t                 blank_modulation_lo ;
+        uint8_t                 blank_time_level_hi ;
+        uint8_t                 blank_time_level_lo ;
     } SSet_NoiseBlanker_Options, * PSet_NoiseBlanker_Options ;
 
     typedef struct {
@@ -473,10 +627,26 @@
         uint8_t                 start_lo ;
         uint8_t                 slope_hi ;
         uint8_t                 slope_lo ;
+        uint8_t                 limit_mode_hi ;
+        uint8_t                 limit_mode_lo ;
+        uint8_t                 limit_hi ;
+        uint8_t                 limit_lo ;
+    } SSet_Softmute_Noise,  * PSet_Softmute_Noise ,
+      SSet_Softmute_Mph,    * PSet_Softmute_Mph ;
+
+    typedef struct {
+        uint8_t                 module ;
+        uint8_t                 cmd ;
+        uint8_t                 index ;
+        uint8_t                 mode_hi ;
+        uint8_t                 mode_lo ;
+        uint8_t                 start_hi ;
+        uint8_t                 start_lo ;
+        uint8_t                 slope_hi ;
+        uint8_t                 slope_lo ;
     } SSet_Softmute_Level,  * PSet_Softmute_Level,
-      SSet_Softmute_Noise,  * PSet_Softmute_Noise,
-      SSet_Softmute_Mph,    * PSet_Softmute_Mph,
       SSet_Highcut_Level,   * PSet_Highcut_Level,
+      SSet_Highcut_Noise,   * PSet_Highcut_Noise,
       SSet_Highcut_Mph,     * PSet_Highcut_Mph,
       SSet_Stereo_Level,    * PSet_Stereo_Level,
       SSet_Stereo_Noise,    * PSet_Stereo_Noise,
@@ -497,8 +667,10 @@
     } SSet_Softmute_Max,    * PSet_Softmute_Max,
       SSet_Highcut_Max,     * PSet_Highcut_Max,
       SSet_Highcut_Min,     * PSet_Highcut_Min,
+      SSet_Highcut_Fix,     * PSet_Highcut_Fix,
       SSet_Lowcut_Max,      * PSet_Lowcut_Max,
       SSet_Lowcut_Min,      * PSet_Lowcut_Min,
+      SSet_Lowcut_Fix,      * PSet_Lowcut_Fix,
       SSet_Stereo_Min,      * PSet_Stereo_Min,
       SSet_StHiBlend_Max,   * PSet_StHiBlend_Max,
       SSet_StHiBlend_Min,   * PSet_StHiBlend_Min
@@ -724,148 +896,232 @@
     } SSet_ReferenceClock,  * PSet_ReferenceClock ;
 
     #if defined(_RADIO_TEF668X_INS_)
-		#include "Tuner_Patch_Lithio_V205_p512.h"
-		
-        uint8_t                 TEF668x_Buf [MAX_TEF668x_BUF] ;
+        #if (PATCH_VERSION == 116U)
+            #include "Tuner_Patch_Lithio_V101_p116.h"
+        #elif (PATCH_VERSION == 119U)
+            #include "Tuner_Patch_Lithio_V101_p119.h"
+        #elif (PATCH_VERSION == 209U)
+            #include "Tuner_Patch_Lithio_V102_p209.h"
+        #elif (PATCH_VERSION == 212U)
+            #include "Tuner_Patch_Lithio_V102_p212.h"
+        #elif (PATCH_VERSION == 213U)
+            #include "Tuner_Patch_Lithio_V102_p213.h"
+        #elif (PATCH_VERSION == 215U)
+            #include "Tuner_Patch_Lithio_V102_p215.h"
+        #elif (PATCH_VERSION == 217U)
+            #include "Tuner_Patch_Lithio_V102_p217.h"
+        #elif (PATCH_VERSION == 224U)
+            #include "Tuner_Patch_Lithio_V102_p224.h"
+        #elif (PATCH_VERSION == 512U)
+            #include "Tuner_Patch_Lithio_V205_p512.h"
+        #endif  // #if (PATCH_VERSION == 512U)
 
-        uint8_t Tune_To (uint8_t * buf, TEF668x_Module module, Tuning_Actions action, uint16_t frequency) ;
-        uint8_t Set_Tune_Options (uint8_t * buf, TEF668x_Module module, uint16_t bw_mode, uint16_t bandwidth, uint16_t mute_time, uint16_t sample_time) ;
-        uint8_t Set_Bandwidth(uint8_t * buf, TEF668x_Module module, IF_BandWidth_Control_Mode mode, uint16_t bandwidth, uint16_t control_sensitivity, uint16_t low_level_sensitivity, uint16_t min_bandwidth, uint16_t nominal_bandwidth, uint16_t control_attack) ;
-        uint8_t Set_RFAGC (uint8_t * buf, TEF668x_Module module, uint16_t start, uint16_t extension) ;
-        uint8_t Set_Antenna (uint8_t * buf, TEF668x_Module module, LNA_Gain_Reduction_LEVEL attenuation) ;
-        uint8_t Set_CoChannelDet (uint8_t * buf, TEF668x_Module module, uint16_t restart, uint16_t sensitivity, uint16_t count) ;
-        uint8_t Set_MphSuppression (uint8_t * buf, TEF668x_Module module, OP_MODE mode) ;
-        uint8_t Set_ChannelEqualizer (uint8_t * buf, TEF668x_Module module, OP_MODE mode) ;
-        uint8_t Set_NoiseBlanker (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t sensitivity, uint16_t modulation, uint16_t offset, uint16_t attack, uint16_t decay) ;
-        uint8_t Set_NoiseBlanker_Options (uint8_t * buf, TEF668x_Module module, uint16_t blank_time, uint16_t blank_time2, uint16_t blank_modulation) ;
-        uint8_t Set_NoiseBlanker_Audio (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t sensitivity, uint16_t blank_time) ;
-        uint8_t Set_DigitalRadio (uint8_t * buf, TEF668x_Module module, OP_MODE mode) ;
-        uint8_t Set_Deemphasis (uint8_t * buf, TEF668x_Module module, DeemphasisTimeConstant_Mode mode) ;
-        uint8_t Set_StereoImprovement (uint8_t * buf, TEF668x_Module module, StereoImprovement_Mode mode) ;
-        uint8_t Set_LevelStep (uint8_t * buf, TEF668x_Module module, int16_t step1, int16_t step2, int16_t step3, int16_t step4, int16_t step5, int16_t step6, int16_t step7) ;
-        uint8_t Set_LevelOffset (uint8_t * buf, TEF668x_Module module, int16_t offset) ;
-        uint8_t Set_Softmute (uint8_t * buf, TEF668x_Module module, uint16_t slow_attack, uint16_t slow_decay, uint16_t fast_attack, uint16_t fast_decay) ;
-        uint8_t Set_Softmute_Mod (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t start, uint16_t slope, uint16_t shift) ;
-        uint8_t Set_Softmute_Level (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope) ;
-        uint8_t Set_Softmute_Noise (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope) ;
-        uint8_t Set_Softmute_Mph (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope) ;
-        uint8_t Set_Softmute_Max (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t limit) ;
-        uint8_t Set_Highcut_Time (uint8_t * buf, TEF668x_Module module, uint16_t slow_attack, uint16_t slow_decay, uint16_t fast_attack, uint16_t fast_decay) ;
-        uint8_t Set_Highcut_Mod (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t start, uint16_t slope, uint16_t shift) ;
-        uint8_t Set_Highcut_Level (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope) ;
-        uint8_t Set_Highcut_Noise (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope) ;
-        uint8_t Set_Highcut_Mph (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope) ;
-        uint8_t Set_Highcut_Max (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t limit) ;
-        uint8_t Set_Highcut_Min (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t limit) ;
-        uint8_t Set_Lowcut_Max (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t limit) ;
-        uint8_t Set_Lowcut_Min (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t limit) ;
-        uint8_t Set_Highcut_Options (uint8_t * buf, TEF668x_Module module, Highcut_Options_Mode mode) ;
-        uint8_t Set_Stereo_Time (uint8_t * buf, TEF668x_Module module, uint16_t slow_attack, uint16_t slow_decay, uint16_t fast_attack, uint16_t fast_decay) ;
-        uint8_t Set_Stereo_Mod (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t start, uint16_t slope, uint16_t shift) ;
-        uint8_t Set_Stereo_Level (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope) ;
-        uint8_t Set_Stereo_Noise (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope) ;
-        uint8_t Set_Stereo_Mph (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope) ;
-        uint8_t Set_Stereo_Max (uint8_t * buf, TEF668x_Module module, OP_MODE mode) ;
-        uint8_t Set_Stereo_Min (uint8_t * buf, TEF668x_Module module, Stereo_Min_MODE mode, uint16_t limit) ;
-        uint8_t Set_StHiBlend_Time (uint8_t * buf, TEF668x_Module module, uint16_t slow_attack, uint16_t slow_decay, uint16_t fast_attack, uint16_t fast_decay) ;
-        uint8_t Set_StHiBlend_Mod (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t start, uint16_t slope, uint16_t shift) ;
-        uint8_t Set_StHiBlend_Level (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope) ;
-        uint8_t Set_StHiBlend_Noise (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope) ;
-        uint8_t Set_StHiBlend_Mph (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope) ;
-        uint8_t Set_StHiBlend_Max (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t limit) ;
-        uint8_t Set_StHiBlend_Min (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t limit) ;
-        uint8_t Set_Scaler (uint8_t * buf, TEF668x_Module module, int16_t gain) ;
-        uint8_t Set_RDS (uint8_t * buf, TEF668x_Module module, RDS_Control_Mode mode, RDS_RESTART_Mode restart, RDS_PIN_SIGNAL_Type interface) ;
-        uint8_t Set_QualityStatus (uint8_t * buf, TEF668x_Module module, uint16_t mode, QualityStatus_PIN_SIGNAL_Type interface) ;
-        uint8_t Set_DR_Blend (uint8_t * buf, TEF668x_Module module, uint16_t mode, uint16_t in_time, uint16_t out_time, int16_t gain) ;
-        uint8_t Set_DR_Options (uint8_t * buf, TEF668x_Module module, uint16_t samplerate, uint16_t mode, uint16_t format) ;
-        uint8_t Set_Specials (uint8_t * buf, TEF668x_Module module, uint16_t ana_out) ;
-        uint8_t Set_Bandwidth_Options (uint8_t * buf, TEF668x_Module module, uint16_t modulation) ;
-        uint8_t Set_StBandBlend_Time (uint8_t * buf, TEF668x_Module module, uint16_t attack, uint16_t decay) ;
-        uint8_t Set_StBandBlend_Gain (uint8_t * buf, TEF668x_Module module, uint16_t band1, uint16_t band2, uint16_t band3, uint16_t band4) ;
-        uint8_t Set_StBandBlend_Bias (uint8_t * buf, TEF668x_Module module, int16_t band1, int16_t band2, int16_t band3, int16_t band4) ;
-        uint8_t Set_Volume (uint8_t * buf, TEF668x_Module module, int16_t volume) ;
-        uint8_t Set_Input (uint8_t * buf, TEF668x_Module module, uint16_t source) ;
-        uint8_t Set_Output_Source (uint8_t * buf, TEF668x_Module module, uint16_t signal, uint16_t source) ;
-        uint8_t Set_Ana_Out (uint8_t * buf, TEF668x_Module module, uint16_t signal, uint16_t mode) ;
-        uint8_t Set_Dig_IO (uint8_t * buf, TEF668x_Module module, uint16_t signal, uint16_t mode, uint16_t format, uint16_t operation, uint16_t samplerate) ;
-        uint8_t Set_Input_Scaler (uint8_t * buf, TEF668x_Module module, uint16_t source, int16_t gain) ;
-        uint8_t Set_WaveGen (uint8_t * buf, TEF668x_Module module, uint16_t mode, int16_t offset, int16_t amplitude1, uint16_t frequency1, int16_t amplitude2, uint16_t frequency2) ;
-        uint8_t Set_OperationMode (uint8_t * buf, TEF668x_Module module, uint16_t mode) ;
-        uint8_t Set_GPIO (uint8_t * buf, TEF668x_Module module, uint16_t pin, TEF668x_Module op_module, uint16_t feature) ;
-        uint8_t Set_ReferenceClock (uint8_t * buf, TEF668x_Module module, uint16_t frequency_msb, uint16_t frequency_lsb, uint16_t clock_type) ;
+        TEF668x_STATE           state_TEF668x = TEF668x_STATE_WAIT_POWERON ;
+        uint8_t                 TEF668x_Buf [MAX_TEF668x_BUF] ;
+        uint32_t                tmr_TEF668x ;
+        uint8_t                 state_boot ;
+        uint8_t *               ptr_boot ;
+        uint8_t *               ptr_patch ;
+        uint32_t                patch_size ;
+        PFUNCvS                 tuner_api_callback ;
+
+        void Handle_TEF668x_Service (status_t exe_state) ;
+        status_t TEF668x_api (uint8_t cmd, PFUNCvS cb, uint8_t argc, ...) ;
+
+        status_t TEF668x_Boot (void) ;
+        /*
+        Note:
+        This table was pasted from GUI, so customer need to change this table for their own request
+              此表從GUI 完全拷貝, 加上最後兩行測試代碼,會有FM 102M 聲音輸出
+        */
+        const uint8_t tuner_init_para_tab[] = {
+        /*
+        Length, Command and Data,                                   Remark
+        ------  --------------------------------------------------- -----------------------------------------------
+        */
+            5,  0x1e, 0x5a, 0x01, 0x5a, 0x5a,                       //reset device
+            2,  INIT_FLAG_TIMER,  100,                              //wait 100ms
+
+            3,  0x1c, 0x00, 0x00,                                   //Clear Required Initialization Control
+            3,  0x1C, 0x00, 0x74,                                   //Set Required Initialization Control(1)
+            1,  INIT_FLAG_PATCH1,                                   //Load Required Initialization(s)....
+
+            3,  0x1c, 0x00, 0x00,                                   //Clear Required Initialization Control
+            3,  0x1C, 0x00, 0x75,                                   //Set Required Initialization Control(2)
+            1,  INIT_FLAG_PATCH2,                                   //Load Required Initialization(s)....
+
+            3,  0x1c, 0x00, 0x00,                                   //Clear Required Initialization Control
+            3,  0x14, 0x00, 0x01,                                   //Start Firmware....
+
+            2,  INIT_FLAG_TIMER,  50,                               //(Boot state to Idle State)
+                                                                    //wait 50ms
+
+            #if (REF_CLOCK == 12000000)
+            9,  0x40, 0x04, 0x01, 0x00, 0xb7, 0x1b,                 //APPL_Set_ReferenceClock 12 MHz
+                0x00, 0x00, 0x00,
+            #elif (REF_CLOCK == 9216000)
+            9,  0x40, 0x04, 0x01, 0x00, 0x8C, 0xA0,                 //APPL_Set_ReferenceClock 9.216 MHz
+                0x00, 0x00, 0x00,
+            #elif (REF_CLOCK == 4000000)
+            9,  0x40, 0x04, 0x01, 0x00, 0x3D, 0x09,                 //APPL_Set_ReferenceClock 4 MHz
+                0x00, 0x00, 0x00,
+            #endif
+
+            //Activate Device...(Idle state to Active state)
+            5,  0x40, 0x05, 0x01, 0x00, 0x01,                       // APPL_Activate
+            2,  INIT_FLAG_TIMER,  100,                              //(Idle state to Active state)
+                                                                    //wait 100ms
+            #if (PATCH_VERSION >= 217)
+            17, 0x20, 0x0A, 0x01, 0x00, 0x01, 0x09, 0x38, 0x05,     // FM_Set_Bandwidth
+                0x46, 0x03, 0xE8, 0x02, 0x30, 0x09, 0x38, 0x01,
+                0x2C,
+            //17, 0x20, 0x0A, 0x01, 0x00, 0x01, 0x09, 0x38, 0x05,       // FM_Set_Bandwidth
+            //    0x46, 0x03, 0xE8, 0x03, 0xE8, 0x09, 0x38, 0x01,
+            //    0x2C,
+            5,  0x20, 0x16, 0x01, 0x00, 0x01,                       // FM_Set_ChannelEqualizer
+            5,  0x20, 0x14, 0x01, 0x00, 0x01,                       // FM_Set_MphSuppression
+            9,  0x20, 0x2A, 0x01, 0x00, 0x03, 0x00, 0x96, 0x00,     // FM_Set_SoftMute_Level
+                0xDC,
+            11, 0x20, 0x28, 0x01, 0x01, 0xF4, 0x00, 0x78, 0x00,     // FM_Set_SoftMute_Time
+                0x0A, 0x00, 0x14,
+            9,  0x20, 0x2C, 0x01, 0x00, 0x03, 0x01, 0x04, 0x03,     // FM_Set_SoftMute_Mph
+                0x34,
+            9,  0x20, 0x2B, 0x01, 0x00, 0x03, 0x01, 0x36, 0x03,     // FM_Set_SoftMute_Noise
+                0x34,
+            9,  0x20, 0x34, 0x01, 0x00, 0x03, 0x01, 0xC2, 0x00,     // FM_Set_HighCut_Level
+                0xFA,
+            11, 0x20, 0x32, 0x01, 0x03, 0xE8, 0x07, 0xD0, 0x00,     // FM_Set_HighCut_Time
+                0x0A, 0x00, 0x14,
+            9,  0x20, 0x36, 0x01, 0x00, 0x03, 0x00, 0xD2, 0x01,     // FM_Set_HighCut_Mph
+                0x18,
+            9,  0x20, 0x35, 0x01, 0x00, 0x03, 0x00, 0xB4, 0x01,     // FM_Set_HighCut_Noise
+                0x18,
+            7,  0x20, 0x3A, 0x01, 0x00, 0x01, 0x00, 0x14,           // FM_Set_LowCut_Min
+            7,  0x20, 0x37, 0x01, 0x00, 0x01, 0x09, 0x60,           // FM_Set_HighCut_Max
+            7,  0x20, 0x39, 0x01, 0x00, 0x00, 0x00, 0x64,           // FM_Set_LowCut_Max
+            9,  0x20, 0x3E, 0x01, 0x00, 0x03, 0x02, 0x58, 0x00,     // FM_Set_Stereo_Level
+                0xFA,
+            11, 0x20, 0x3C, 0x01, 0x03, 0xE8, 0x0F, 0xA0, 0x00,     // FM_Set_Stereo_Time
+                0x0A, 0x00, 0x14,
+            9,  0x20, 0x40, 0x01, 0x00, 0x03, 0x00, 0xD2, 0x01,     // FM_Set_Stereo_Mph
+                0x18,
+            9,  0x20, 0x3F, 0x01, 0x00, 0x03, 0x00, 0xB4, 0x01,     // FM_Set_Stereo_Noise
+                0x18,
+            9,  0x20, 0x48, 0x01, 0x00, 0x03, 0x02, 0x58, 0x00,     // FM_Set_StHiBlend_Level
+                0xFA,
+            11, 0x20, 0x46, 0x01, 0x01, 0xF4, 0x07, 0xD0, 0x00,     // FM_Set_StHiBlend_Time
+                0x0A, 0x00, 0x14,
+            9,  0x20, 0x4A, 0x01, 0x00, 0x03, 0x00, 0xD2, 0x01,     // FM_Set_StHiBlend_Mph
+                0x18,
+            9,  0x20, 0x49, 0x01, 0x00, 0x03, 0x00, 0xB4, 0x01,     // FM_Set_StHiBlend_Noise
+                0x18,
+            9,  0x40, 0x03, 0x01, 0x00, 0x00, 0x00, 0x21, 0x00,     // APPL_Set_GPIO
+                0x03,
+            9,  0x40, 0x03, 0x01, 0x00, 0x01, 0x00, 0x21, 0x00,     // APPL_Set_GPIO
+                0x00,
+            9,  0x40, 0x03, 0x01, 0x00, 0x02, 0x00, 0x21, 0x00,     // APPL_Set_GPIO
+                0x00,
+            9,  0x40, 0x03, 0x01, 0x00, 0x00, 0x00, 0x20, 0x00,     // APPL_Set_GPIO
+                0x03,
+            9,  0x40, 0x03, 0x01, 0x00, 0x01, 0x00, 0x20, 0x00,     // APPL_Set_GPIO
+                0x00,
+            9,  0x40, 0x03, 0x01, 0x00, 0x02, 0x00, 0x20, 0x00,     // APPL_Set_GPIO
+                0x00,
+
+            13, 0x30, 0x16, 0x01, 0x00, 0x20, 0x00, 0x00, 0x00,     // AUDIO_Set_Dig_IO
+                0x20, 0x00, 0x00, 0x11, 0x3A,
+            13, 0x30, 0x16, 0x01, 0x00, 0x21, 0x00, 0x00, 0x00,     // AUDIO_Set_Dig_IO
+                0x20, 0x00, 0x00, 0x11, 0x3A,
+
+            5,  0x30, 0x0B, 0x01, 0x00, 0x00,                       // AUDIO_Set_Mute
+            5,  0x30, 0x0A, 0x01, 0x00, 0x35,                       // AUDIO_Set_Volume
+            7,  0x30, 0x0D, 0x01, 0x00, 0x80, 0x00, 0xE0,           // AUDIO_Set_Output_Source
+#endif
+            //Device Fully Initialised: LithioDR (TEF6688), Waiting for User Event........
+
+            //from here for testing -------------------------------------
+
+            7,  0x20, 0x01, 0x01, 0x00, 0x01, 0x28, 0xFA,           // FM_Tune_To (1, 1, 10490)
+            5,  0x30, 0x0A, 0x01, 0x00, 0x14,                       // AUDIO_Set_Volume 20dB
+
+            //-------after loading the table, FM104.9M will output
+            0                                                       // END
+        } ;  // static const uint8_t tuner_init_para_tab[]
+
+        // This table is executed after command FM_Tune_To
+        const uint8_t tuner_FM_para_tab[] = {
+            /*===== =================================================== ===============================================
+            Length, Command and Data,                                   Remark
+            ======= =================================================== =============================================== */
+            0x05,   0x20, 0x16, 0x01, 0x00, 0x01,                       // FM_Set_ChannelEqualizer
+            0x05,   0x20, 0x14, 0x01, 0x00, 0x01,                       // FM_Set_MphSuppression
+            0x0b,   0x20, 0x28, 0x01, 0x00, 0x78, 0x01, 0xf4, 0x00,     // FM_Set_SoftMute_Time
+                    0x0a, 0x00, 0x14,
+            0x09,   0x20, 0x2c, 0x01, 0x00, 0x00, 0x00, 0xc8, 0x03,     // FM_Set_SoftMute_Time_Mph
+                    0xe8,
+            0x09,   0x20, 0x2c, 0x01, 0x00, 0x00, 0x00, 0xc8, 0x03,     // FM_Set_SoftMute_Time_Mph
+                    0xe8,
+            0x09,   0x20, 0x2b, 0x01, 0x00, 0x00, 0x00, 0xc8, 0x03,     // FM_Set_SoftMute_Time_Noise
+                    0xe8,
+            0x0b,   0x20, 0x32, 0x01, 0x00, 0xc8, 0x07, 0xd0, 0x00,     // FM_Set_HighCut_Time
+                    0x0a, 0x00, 0x50,
+            0x09,   0x20, 0x36, 0x01, 0x00, 0x03, 0x00, 0x78, 0x00,     // FM_Set_HighCut_Mph
+                    0xa0,
+            0x09,   0x20, 0x35, 0x01, 0x00, 0x03, 0x00, 0x96, 0x00,     // FM_Set_HighCut_Noise
+                    0xc8,
+            0x07,   0x20, 0x37, 0x01, 0x00, 0x01, 0x09, 0x60,           // FM_Set_HighCut_Max
+            0x07,   0x20, 0x39, 0x01, 0x00, 0x01, 0x00, 0x64,           // FM_Set_LowCut_Min
+            0x0b,   0x20, 0x3C, 0x01, 0x00, 0xc8, 0x0f, 0xa0, 0x00,     // FM_Set_Stereo_Time
+                    0x14, 0x00, 0x60,
+            0x09,   0x20, 0x40, 0x01, 0x00, 0x03, 0x00, 0x64, 0x00,     // FM_Set_Stereo_Mph
+                    0x96,
+            0x09,   0x20, 0x3f, 0x01, 0x00, 0x03, 0x00, 0x78, 0x00,     // FM_Set_Stereo_Noise
+                    0xa0,
+            0x09,   0x20, 0x4a, 0x01, 0x00, 0x03, 0x00, 0x50, 0x00,     // FM_Set_StHiBlend_Mph
+                    0x8c,
+            0x09,   0x20, 0x49, 0x01, 0x00, 0x03, 0x00, 0x50, 0x00,     // FM_Set_StHiBlend_Noise
+                    0x8c,
+            0x09,   0x40, 0x03, 0x01, 0x00, 0x00, 0x00, 0x21, 0x00,     // APPL_Set_GPIO
+                    0x03,
+            0x09,   0x40, 0x03, 0x01, 0x00, 0x01, 0x00, 0x21, 0x00,     // APPL_Set_GPIO
+                    0x00,
+            0x09,   0x40, 0x03, 0x01, 0x00, 0x02, 0x00, 0x21, 0x00,     // APPL_Set_GPIO
+                    0x00,
+            0x09,   0x40, 0x03, 0x01, 0x00, 0x00, 0x00, 0x20, 0x00,     // APPL_Set_GPIO
+                    0x03,
+            0x09,   0x40, 0x03, 0x01, 0x00, 0x01, 0x00, 0x20, 0x00,     // APPL_Set_GPIO
+                    0x00,
+            0x09,   0x40, 0x03, 0x01, 0x00, 0x02, 0x00, 0x20, 0x00,     // APPL_Set_GPIO
+                    0x00,
+            0x0d,   0x30, 0x16, 0x01, 0x00, 0x20, 0x00, 0x00, 0x00,     // AUDIO_Set_Dig_IO
+                    0x20, 0x00, 0x00, 0x11, 0x3a,
+            0x0d,   0x30, 0x16, 0x01, 0x00, 0x21, 0x00, 0x00, 0x00,     // AUDIO_Set_Dig_IO
+                    0x20, 0x00, 0x00, 0x11, 0x3a,
+            0x05,   0x30, 0x0b, 0x01, 0x00, 0x00,                       // AUDIO_Set_Mute
+            0x05,   0x30, 0x0a, 0x01, 0x00, 0x32,                       // AUDIO_Set_Volume
+            0x07,   0x30, 0x0d, 0x01, 0x00, 0x80, 0x00, 0xe0,           // AUDIO_Set_Output_Source
+            0
+        } ; // const uint8_t tuner_FM_para_tab[]
+
+        // This table is executed after command AM_Tune_To
+        const uint8_t tuner_AM_para_tab[] = {
+            /*===== =================================================== ===============================================
+            Length, Command and Data,                                   Remark
+            ======= =================================================== =============================================== */
+            0x07,   0x21, 0x52, 0x01, 0x00, 0xc8, 0x00, 0xe0,           // AM_Set_QualityStatus
+            0x07,   0x21, 0x52, 0x01, 0x00, 0x00, 0x00, 0xe0,           // AM_Set_QualityStatus
+            0x05,   0x30, 0x0a, 0x01, 0x00, 0x32,                       // AUDIO_Set_Volume
+            0
+        } ; // const uint8_t tuner_AM_para_tab[]
 
         #undef                  _RADIO_TEF668X_INS_
     #else
         extern uint8_t          TEF668x_Buf [MAX_TEF668x_BUF] ;
 
-        extern void TEF668x_Handle (void) ;
-        extern uint8_t Tune_To (uint8_t * buf, TEF668x_Module module, Tuning_Actions action, uint16_t frequency) ;
-        extern uint8_t Set_Tune_Options (uint8_t * buf, TEF668x_Module module, uint16_t bw_mode, uint16_t bandwidth, uint16_t mute_time, uint16_t sample_time) ;
-        extern uint8_t Set_Bandwidth(uint8_t * buf, TEF668x_Module module, IF_BandWidth_Control_Mode mode, uint16_t bandwidth, uint16_t control_sensitivity, uint16_t low_level_sensitivity, uint16_t min_bandwidth, uint16_t nominal_bandwidth, uint16_t control_attack) ;
-        extern uint8_t Set_RFAGC (uint8_t * buf, TEF668x_Module module, uint16_t start, uint16_t extension) ;
-        extern uint8_t Set_Antenna (uint8_t * buf, TEF668x_Module module, LNA_Gain_Reduction_LEVEL attenuation) ;
-        extern uint8_t Set_CoChannelDet (uint8_t * buf, TEF668x_Module module, uint16_t restart, uint16_t sensitivity, uint16_t count) ;
-        extern uint8_t Set_MphSuppression (uint8_t * buf, TEF668x_Module module, OP_MODE mode) ;
-        extern uint8_t Set_ChannelEqualizer (uint8_t * buf, TEF668x_Module module, OP_MODE mode) ;
-        extern uint8_t Set_NoiseBlanker (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t sensitivity, uint16_t modulation, uint16_t offset, uint16_t attack, uint16_t decay) ;
-        extern uint8_t Set_NoiseBlanker_Options (uint8_t * buf, TEF668x_Module module, uint16_t blank_time, uint16_t blank_time2, uint16_t blank_modulation) ;
-        extern uint8_t Set_NoiseBlanker_Audio (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t sensitivity, uint16_t blank_time) ;
-        extern uint8_t Set_DigitalRadio (uint8_t * buf, TEF668x_Module module, OP_MODE mode) ;
-        extern uint8_t Set_Deemphasis (uint8_t * buf, TEF668x_Module module, DeemphasisTimeConstant_Mode mode) ;
-        extern uint8_t Set_StereoImprovement (uint8_t * buf, TEF668x_Module module, StereoImprovement_Mode mode) ;
-        extern uint8_t Set_LevelStep (uint8_t * buf, TEF668x_Module module, int16_t step1, int16_t step2, int16_t step3, int16_t step4, int16_t step5, int16_t step6, int16_t step7) ;
-        extern uint8_t Set_LevelOffset (uint8_t * buf, TEF668x_Module module, int16_t offset) ;
-        extern uint8_t Set_Softmute (uint8_t * buf, TEF668x_Module module, uint16_t slow_attack, uint16_t slow_decay, uint16_t fast_attack, uint16_t fast_decay) ;
-        extern uint8_t Set_Softmute_Mod (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t start, uint16_t slope, uint16_t shift) ;
-        extern uint8_t Set_Softmute_Level (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope) ;
-        extern uint8_t Set_Softmute_Noise (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope) ;
-        extern uint8_t Set_Softmute_Mph (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope) ;
+        extern void Handle_TEF668x (void) ;
+        extern status_t TEF668x_api (uint8_t cmd, PFUNCvS cb, uint8_t argc, ...) ;
 
-        extern uint8_t Set_Softmute_Max (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t limit) ;
-        extern uint8_t Set_Highcut_Time (uint8_t * buf, TEF668x_Module module, uint16_t slow_attack, uint16_t slow_decay, uint16_t fast_attack, uint16_t fast_decay) ;
-        extern uint8_t Set_Highcut_Mod (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t start, uint16_t slope, uint16_t shift) ;
-        extern uint8_t Set_Highcut_Level (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope) ;
-        extern uint8_t Set_Highcut_Noise (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope) ;
-        extern uint8_t Set_Highcut_Mph (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope) ;
-        extern uint8_t Set_Highcut_Max (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t limit) ;
-        extern uint8_t Set_Highcut_Min (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t limit) ;
-        extern uint8_t Set_Lowcut_Max (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t limit) ;
-        extern uint8_t Set_Lowcut_Min (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t limit) ;
-        extern uint8_t Set_Highcut_Options (uint8_t * buf, TEF668x_Module module, Highcut_Options_Mode mode) ;
-        extern uint8_t Set_Stereo_Time (uint8_t * buf, TEF668x_Module module, uint16_t slow_attack, uint16_t slow_decay, uint16_t fast_attack, uint16_t fast_decay) ;
-        extern uint8_t Set_Stereo_Mod (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t start, uint16_t slope, uint16_t shift) ;
-        extern uint8_t Set_Stereo_Level (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope) ;
-        extern uint8_t Set_Stereo_Noise (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope) ;
-        extern uint8_t Set_Stereo_Mph (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope) ;
-        extern uint8_t Set_Stereo_Max (uint8_t * buf, TEF668x_Module module, OP_MODE mode) ;
-        extern uint8_t Set_Stereo_Min (uint8_t * buf, TEF668x_Module module, Stereo_Min_MODE mode, uint16_t limit) ;
-        extern uint8_t Set_StHiBlend_Time (uint8_t * buf, TEF668x_Module module,  uint16_t slow_attack, uint16_t slow_decay, uint16_t fast_attack, uint16_t fast_decay) ;
-        extern uint8_t Set_StHiBlend_Mod (uint8_t * buf, TEF668x_Module module,  OP_MODE mode, uint16_t start, uint16_t slope, uint16_t shift) ;
-        extern uint8_t Set_StHiBlend_Level (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope) ;
-        extern uint8_t Set_StHiBlend_Noise (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope) ;
-        extern uint8_t Set_StHiBlend_Mph (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope) ;
-        extern uint8_t Set_StHiBlend_Max (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t limit) ;
-        extern uint8_t Set_StHiBlend_Min (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t limit) ;
-        extern uint8_t Set_Scaler (uint8_t * buf, TEF668x_Module module, int16_t gain) ;
-        extern uint8_t Set_RDS (uint8_t * buf, TEF668x_Module module, RDS_Control_Mode mode, RDS_RESTART_Mode restart, RDS_PIN_SIGNAL_Type interface) ;
-        extern uint8_t Set_QualityStatus (uint8_t * buf, TEF668x_Module module, uint16_t mode, QualityStatus_PIN_SIGNAL_Type interface) ;
-        extern uint8_t Set_DR_Blend (uint8_t * buf, TEF668x_Module module, uint16_t mode, uint16_t in_time, uint16_t out_time, int16_t gain) ;
-        extern uint8_t Set_DR_Options (uint8_t * buf, TEF668x_Module module, uint16_t samplerate, uint16_t mode, uint16_t format) ;
-        extern uint8_t Set_Specials (uint8_t * buf, TEF668x_Module module, uint16_t ana_out) ;
-        extern uint8_t Set_Bandwidth_Options (uint8_t * buf, TEF668x_Module module, uint16_t modulation) ;
-        extern uint8_t Set_StBandBlend_Time (uint8_t * buf, TEF668x_Module module, uint16_t attack, uint16_t decay) ;
-        extern uint8_t Set_StBandBlend_Gain (uint8_t * buf, TEF668x_Module module, uint16_t band1, uint16_t band2, uint16_t band3, uint16_t band4) ;
-        extern uint8_t Set_StBandBlend_Bias (uint8_t * buf, TEF668x_Module module, int16_t band1, int16_t band2, int16_t band3, int16_t band4) ;
-        extern uint8_t Set_Volume (uint8_t * buf, TEF668x_Module module, int16_t volume) ;
-        extern uint8_t Set_Input (uint8_t * buf, TEF668x_Module module, uint16_t source) ;
-        extern uint8_t Set_Output_Source (uint8_t * buf, TEF668x_Module module, uint16_t signal, uint16_t source) ;
-        extern uint8_t Set_Ana_Out (uint8_t * buf, TEF668x_Module module, uint16_t signal, uint16_t mode) ;
-        extern uint8_t Set_Dig_IO (uint8_t * buf, TEF668x_Module module, uint16_t signal, uint16_t mode, uint16_t format, uint16_t operation, uint16_t samplerate) ;
-        extern uint8_t Set_Input_Scaler (uint8_t * buf, TEF668x_Module module, uint16_t source, int16_t gain) ;
-        extern uint8_t Set_WaveGen (uint8_t * buf, TEF668x_Module module, uint16_t mode, int16_t offset, int16_t amplitude1, uint16_t frequency1, int16_t amplitude2, uint16_t frequency2) ;
-        extern uint8_t Set_OperationMode (uint8_t * buf, TEF668x_Module module, uint16_t mode) ;
-        extern uint8_t Set_GPIO (uint8_t * buf, TEF668x_Module module, uint16_t pin, TEF668x_Module op_module, uint16_t feature) ;
-        extern uint8_t Set_ReferenceClock (uint8_t * buf, TEF668x_Module module, uint16_t frequency_msb, uint16_t frequency_lsb, uint16_t clock_type) ;
+        extern status_t GetState_TEF668x (void) ;
+        extern status_t SetState_TEF668x (TEF668x_STATE new_state) ;
     #endif  // #if defined(_RADIO_TEF668X_INS_)
 #endif /* RADIO_TEF668X_H_ */

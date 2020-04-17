@@ -27,6 +27,9 @@
 		#define LED_BLUE      	23U   /* pin PTE23 - Blue LED on DEV-KIT */
 		#define LED_BLUE_PORT   PTE   /* GPIO PORT E */
 
+		#define nRESET_CODEC    14U   /* pin PTA14 - nReset of CODEC */
+		#define nRESET_CODEC_PORT PTA   /* GPIO PORT A */
+
 		#define BTN_SW2			12U   /* pin PTC12 - SW2 on DEV-KIT */
 		#define BTN_SW2_PORT   	PTC   /* GPIO PORT C */
 
@@ -40,11 +43,19 @@
     typedef void (* PHANDLE)(void) ;
 
     #if defined (__BOARD_INS__)
-        uint32_t    sys_tmr_led ;
+        uint32_t            sys_tmr_led ;
+        uint32_t            tmr_wheeltick ;
+        uint16_t            vehicle_speed  = 0 ;    // unit: KMH
+        uint16_t            vehicle_speed_old = (uint16_t)-1 ;
+        uint32_t            wheeltick_timeInterval = 0 ;
 
+        void Handle_WHEELTICK(void) ;
         #undef  __BOARD_INC__
     #else
+        extern uint16_t vehicle_speed ;     // unit: KMH
+
         extern void board_init(void) ;
         extern void Handle_LED(void) ;
+        extern void Handle_WHEELTICK(void) ;
     #endif  // #if defined (__BOARD_INS__)
 #endif /* MCAL_MAIN_BOARD_H_ */

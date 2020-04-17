@@ -52,12 +52,28 @@ int16_t I2C_WriteData (uint8_t req_slave_address, uint8_t * buf, uint16_t len) {
     return (i2c_buf_len) ;
 }   // int16_t I2C_WriteData (uint8_t req_slave_address, uint8_t * buf, uint16_t len)
 
+int16_t I2C_WriteDataCB (uint8_t req_slave_address, uint8_t * buf, uint16_t len, PFUNCvS cb) {
+    if (cb != (PFUNCvS)NULL) {
+        i2c_ReportCallBack = cb ;
+    }   // if (cb != (PFUNCvS)NULL)
+
+    return (I2C_WriteData(req_slave_address, buf, len)) ;
+}   // int16_t I2C_WriteDataCB (uint8_t req_slave_address, uint8_t * buf, uint16_t len, PFUNCvS cb)
+
 void I2C_ReadData (uint8_t req_slave_address, uint8_t * buf, uint16_t len) {
     req_i2c_slave_address = req_slave_address ;
     req_i2c_state = I2C_STATE_READ ;
     i2c_tar_buf = buf ;
     i2c_tar_buf_len = len ;
 }   // void I2C_ReadData (uint8_t req_slave_address, uint8_t * buf, uint16_t len)
+
+void I2C_ReadDataCB (uint8_t req_slave_address, uint8_t * buf, uint16_t len, PFUNCvS cb) {
+    if (cb != (PFUNCvS)NULL) {
+        i2c_ReportCallBack = cb ;
+    }   // if (cb != (PFUNCvS)NULL)
+
+    I2C_ReadData(req_slave_address, buf, len) ;
+}
 
 int16_t I2C_WriteReadData (uint8_t req_slave_address, uint8_t * wbuf, uint16_t wlen, uint8_t * rbuf, uint16_t rlen) {
     req_i2c_slave_address = req_slave_address ;
@@ -75,6 +91,14 @@ int16_t I2C_WriteReadData (uint8_t req_slave_address, uint8_t * wbuf, uint16_t w
 
     return (i2c_buf_len) ;
 }   // int16_t I2C_WriteReadData (uint8_t req_slave_address, uint8_t * wbuf, uint16_t wlen, , uint8_t * rbuf, uint16_t rlen)
+
+int16_t I2C_WriteReadDataCB (uint8_t req_slave_address, uint8_t * wbuf, uint16_t wlen, uint8_t * rbuf, uint16_t rlen, PFUNCvS cb) {
+    if (cb != (PFUNCvS)NULL) {
+        i2c_ReportCallBack = cb ;
+    }   // if (cb != (PFUNCvS)NULL)
+
+    return (I2C_WriteReadData(req_slave_address, wbuf, wlen, rbuf, rlen)) ;
+}   // int16_t I2C_WriteReadDataCB (uint8_t req_slave_address, uint8_t * wbuf, uint16_t wlen, uint8_t * rbuf, uint16_t rlen, PFUNCvS cb)
 
 void Handle_I2C_STATE_INIT (void) {
 
@@ -94,6 +118,7 @@ void Handle_I2C_STATE_INIT (void) {
     i2c_master_state = I2C_STATE_IDLE ;
     req_i2c_state = I2C_STATE_IDLE ;
     i2c_result = I2C_IDLE ;
+    i2c_ReportCallBack = (PFUNCvS)NULL ;
 }   // void Handle_I2C_STATE_INIT (void)
 
 void Handle_I2C_STATE_IDLE (void) {
@@ -145,6 +170,8 @@ void Handle_I2C_STATE_WAIT (void) {
     req_i2c_state = I2C_STATE_IDLE ;
 
     i2c_master_state = I2C_STATE_IDLE ;
+
+    i2c_ReportCallBack = (PFUNCvS)NULL ;
 }   // void Handle_I2C_STATE_WAIT (void)
 
 void Handle_I2C_STATE_WRITE (void) {
@@ -168,6 +195,9 @@ void Handle_I2C_STATE_WRITE_FINISHED (void) {
         i2c_master_state = I2C_STATE_WAIT ;
         i2c_result = I2C_SUCCESS ;
         TimerStop(&tmr_i2c) ;
+        if (i2c_ReportCallBack != (PFUNCvS)NULL) {
+            i2c_ReportCallBack (STATUS_SUCCESS) ;
+        }   // if (cb != (PFUNCvS)NULL)
     }   // if (read_state == STATUS_SUCCESS)
     else if (read_state == STATUS_ERROR || read_state == STATUS_I2C_RECEIVED_NACK) {
         i2c_result = I2C_FAIL ;
@@ -175,12 +205,18 @@ void Handle_I2C_STATE_WRITE_FINISHED (void) {
         LPI2C_DRV_MasterInit(INST_LPI2C1, &lpi2c1_MasterConfig0, &lpi2c1MasterState);
         //LPI2C_DRV_MasterAbortTransferData(INST_LPI2C1);
         TimerStop(&tmr_i2c) ;
+        if (i2c_ReportCallBack != (PFUNCvS)NULL) {
+            i2c_ReportCallBack (read_state) ;
+        }   // if (cb != (PFUNCvS)NULL)
     }
     else if (TimerHasExpired(&tmr_i2c) == TRUE) {
         LPI2C_DRV_MasterAbortTransferData(INST_LPI2C1) ;
         i2c_result = I2C_FAIL ;
         i2c_master_state = I2C_STATE_WAIT ;
         TimerStop(&tmr_i2c) ;
+        if (i2c_ReportCallBack != (PFUNCvS)NULL) {
+            i2c_ReportCallBack (STATUS_I2C_ABORTED) ;
+        }   // if (cb != (PFUNCvS)NULL)
     }   // if (TimerHasExpired(&tmr_i2c) == TRUE)
 }   // void Handle_I2C_STATE_WRITE_FINISHED (void)
 
@@ -205,6 +241,9 @@ void Handle_I2C_STATE_READ_FINISHED (void) {
         i2c_master_state = I2C_STATE_WAIT ;
         i2c_result = I2C_SUCCESS ;
         TimerStop(&tmr_i2c) ;
+        if (i2c_ReportCallBack != (PFUNCvS)NULL) {
+            i2c_ReportCallBack (STATUS_SUCCESS) ;
+        }   // if (cb != (PFUNCvS)NULL)
     }   // if (read_state == STATUS_SUCCESS)
     else if (read_state == STATUS_ERROR || read_state == STATUS_I2C_RECEIVED_NACK) {
         i2c_result = I2C_FAIL ;
@@ -212,12 +251,18 @@ void Handle_I2C_STATE_READ_FINISHED (void) {
         LPI2C_DRV_MasterInit(INST_LPI2C1, &lpi2c1_MasterConfig0, &lpi2c1MasterState);
         //LPI2C_DRV_MasterAbortTransferData(INST_LPI2C1);
         TimerStop(&tmr_i2c) ;
+        if (i2c_ReportCallBack != (PFUNCvS)NULL) {
+            i2c_ReportCallBack (read_state) ;
+        }   // if (cb != (PFUNCvS)NULL)
     }
     else if (TimerHasExpired(&tmr_i2c) == TRUE) {
         LPI2C_DRV_MasterAbortTransferData(INST_LPI2C1) ;
         i2c_result = I2C_FAIL ;
         i2c_master_state = I2C_STATE_WAIT ;
         TimerStop(&tmr_i2c) ;
+        if (i2c_ReportCallBack != (PFUNCvS)NULL) {
+            i2c_ReportCallBack (STATUS_I2C_ABORTED) ;
+        }   // if (cb != (PFUNCvS)NULL)
     }   // if (TimerHasExpired(&tmr_i2c) == TRUE)
 }   // void Handle_I2C_STATE_READ_FINISHED (void)
 
@@ -239,8 +284,13 @@ void Handle_I2C_STATE_WRITE_THEN_READ_FINISHED_WRITE (void) {
 
     read_state = LPI2C_DRV_MasterGetTransferStatus(INST_LPI2C1, &bytesRemaining) ;
     if (read_state == STATUS_SUCCESS) {
-        i2c_master_state = I2C_STATE_WRITE_THEN_READ_START_READ ;
-        TimerStop(&tmr_i2c) ;
+        //i2c_master_state = I2C_STATE_WRITE_THEN_READ_START_READ ;
+        //TimerStop(&tmr_i2c) ;
+
+        TimerSet(&tmr_i2c, MAX_I2C_ACCESS_TIME) ;
+        //LPI2C_DRV_MasterReceiveDataBlocking(INST_LPI2C1, i2c_tar_buf, i2c_tar_buf_len, true, OSIF_WAIT_FOREVER);
+        LPI2C_DRV_MasterReceiveData(INST_LPI2C1, i2c_tar_buf, i2c_tar_buf_len, true);
+        i2c_master_state = I2C_STATE_WRITE_THEN_READ_FINISHED_READ ;
     }   // if (read_state == STATUS_SUCCESS)
     else if (read_state == STATUS_ERROR || read_state == STATUS_I2C_RECEIVED_NACK) {
         i2c_result = I2C_FAIL ;
@@ -248,12 +298,18 @@ void Handle_I2C_STATE_WRITE_THEN_READ_FINISHED_WRITE (void) {
         LPI2C_DRV_MasterAbortTransferData(INST_LPI2C1);
         LPI2C_DRV_MasterInit(INST_LPI2C1, &lpi2c1_MasterConfig0, &lpi2c1MasterState);
         TimerStop(&tmr_i2c) ;
+        if (i2c_ReportCallBack != (PFUNCvS)NULL) {
+            i2c_ReportCallBack (read_state) ;
+        }   // if (cb != (PFUNCvS)NULL)
     }
     else if (TimerHasExpired(&tmr_i2c) == TRUE) {
         LPI2C_DRV_MasterAbortTransferData(INST_LPI2C1) ;
         i2c_result = I2C_FAIL ;
         i2c_master_state = I2C_STATE_WAIT ;
         TimerStop(&tmr_i2c) ;
+        if (i2c_ReportCallBack != (PFUNCvS)NULL) {
+            i2c_ReportCallBack (STATUS_I2C_ABORTED) ;
+        }   // if (cb != (PFUNCvS)NULL)
     }   // if (TimerHasExpired(&tmr_i2c) == TRUE)
 }   // void Handle_I2C_STATE_WRITE_THEN_READ_FINISHED_WRITE (void)
 
@@ -273,6 +329,9 @@ void Handle_I2C_STATE_WRITE_THEN_READ_FINISHED_READ (void) {
         i2c_master_state = I2C_STATE_WAIT ;
         i2c_result = I2C_SUCCESS ;
         TimerStop(&tmr_i2c) ;
+        if (i2c_ReportCallBack != (PFUNCvS)NULL) {
+            i2c_ReportCallBack (STATUS_SUCCESS) ;
+        }   // if (cb != (PFUNCvS)NULL)
     }   // if (read_state == STATUS_SUCCESS)
     else if (read_state == STATUS_ERROR || read_state == STATUS_I2C_RECEIVED_NACK) {
         i2c_result = I2C_FAIL ;
@@ -280,11 +339,17 @@ void Handle_I2C_STATE_WRITE_THEN_READ_FINISHED_READ (void) {
         LPI2C_DRV_MasterAbortTransferData(INST_LPI2C1);
         LPI2C_DRV_MasterInit(INST_LPI2C1, &lpi2c1_MasterConfig0, &lpi2c1MasterState);
         TimerStop(&tmr_i2c) ;
+        if (i2c_ReportCallBack != (PFUNCvS)NULL) {
+            i2c_ReportCallBack (read_state) ;
+        }   // if (cb != (PFUNCvS)NULL)
     }
     else if (TimerHasExpired(&tmr_i2c) == TRUE) {
         LPI2C_DRV_MasterAbortTransferData(INST_LPI2C1) ;
         i2c_result = I2C_FAIL ;
         i2c_master_state = I2C_STATE_WAIT ;
         TimerStop(&tmr_i2c) ;
+        if (i2c_ReportCallBack != (PFUNCvS)NULL) {
+            i2c_ReportCallBack (STATUS_I2C_ABORTED) ;
+        }   // if (cb != (PFUNCvS)NULL)
     }   // if (TimerHasExpired(&tmr_i2c) == TRUE)
 }   // void Handle_I2C_STATE_WRITE_THEN_READ_FINISHED_READ (void)

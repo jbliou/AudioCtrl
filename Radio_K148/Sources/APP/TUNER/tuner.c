@@ -14,35 +14,26 @@
 #include "tuner.h"
 
 void Handle_TUNER(void) {
-    uint8_t     tmp_state ;
-
-    if (GetI2CState() != STATUS_BUSY) {
-        switch (state_tuner) {
-            case TUNER_STATE_INIT :
-                //TimerStop(&tmr_tuner) ;
-                state_tuner = TUNER_STATE_GET_POWERON_STATE ;
-                i2c_slave_tuner_address = I2C_ADDRESS_TEF668x ;
-                break ;
-            case TUNER_STATE_GET_POWERON_STATE :
-                TEF668x_Buf[0] = TEF668x_Module_APPL ;
-                TEF668x_Buf[1] = TEF668x_cmd_Get_Operation_Status ;
-                TEF668x_Buf[2] = 1 ;
-                I2C_WriteReadData(i2c_slave_tuner_address, TEF668x_Buf, 3U, TEF668x_Buf+3, 2U) ;
-                state_tuner = TUNER_STATE_CHECK_POWERON_STATE ;
-                TimerSet(&tmr_tuner, 50) ;
-                break ;
-            case TUNER_STATE_CHECK_POWERON_STATE :
-                tmp_state = GetI2CExecuteState() ;
-                if (tmp_state == I2C_SUCCESS) {
-                    TimerStop(&tmr_tuner) ;
-                    state_tuner = TUNER_STATE_BOOT ;
-                }
-                else if (TimerHasExpired(&tmr_tuner) == TRUE) {
-                    state_tuner = TUNER_STATE_GET_POWERON_STATE ;
-                }
-                break ;
-            case TUNER_STATE_BOOT :
-                break ;
-        }   // switch (state_tuner)
-    }
+#if (TEF668x_API_DEBUG == 0)
+    Handle_TEF668x() ;
+    switch (state_tuner) {
+        case TUNER_STATE_INIT :
+            TimerStop(&tmr_tuner) ;
+            state_tuner = TUNER_STATE_STANDBY ;
+            break ;
+        case TUNER_STATE_STANDBY :
+            if (GetState_TEF668x() == STATUS_SUCCESS) {
+                state_tuner = TUNER_STATE_IDLE ;
+            }   // if (GetState_TEF668x() == STATUS_SUCCESS)
+            break ;
+        case TUNER_STATE_IDLE :
+            break ;
+    }   // switch (state_tuner)
+#else
+    //TEF668x_api(TEF668X_API_FM_Tune_To, (PFUNCvS)NULL, 2, Tuning_Actions_Mode_Preset, 10790) ;
+    //TEF668x_api(TEF668X_API_FM_Set_MphSuppression, (PFUNCvS)NULL, 1, 0) ;
+    //TEF668x_api(TEF668X_API_FM_Set_NoiseBlanker, (PFUNCvS)NULL, 4, 1, 1000, 1000, 1250) ;
+    //TEF668x_api(TEF668X_API_FM_Set_NoiseBlanker, (PFUNCvS)NULL, 3, 1, 1000, 1000) ;
+    //TEF668x_api(TEF668X_API_APPL_Set_ReferenceClock, (PFUNCvS)NULL, 2, 12000000, 1) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
 }

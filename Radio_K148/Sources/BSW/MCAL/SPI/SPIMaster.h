@@ -24,10 +24,10 @@
     } SPI_STATE ;
 
     #if defined (__SPIMASTER_INS__)
-        uint32_t        timer_spi ;
-        SPI_STATE       spi_state = SPI_STATE_INIT ;
-        uint8_t         spi_buf [MAX_SPI_BUF] ;
-        const uint32_t  spi_op_ins = SPI_OP_PORT ;
+        uint32_t            timer_spi ;
+        SPI_STATE           spi_state = SPI_STATE_INIT ;
+        uint8_t             spi_buf [MAX_SPI_BUF] ;
+        const uint32_t      spi_op_ins = SPI_OP_PORT ;
 
         void Handle_SPI_INIT(void) ;
         void Handle_SPI_IDLE(void) ;

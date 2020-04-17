@@ -9,6 +9,7 @@
 #define BSW_MCAL_EXTFLASH_W25M321AV_H_
 
 #define SOFTWARE_DIE_SELECT         (0xc2U)
+
 #define DIE_W25Q32JV                (0U)
 #define DIE_W25N01GV                (1U)
 #define DIE_ACTIVE                  (DIE_W25Q32JV)

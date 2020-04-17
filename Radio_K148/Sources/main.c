@@ -29,6 +29,7 @@
 #include "tuner.h"
 #include "SPIMaster.h"
 #include "ExtFlash.h"
+#include "codec.h"
 
 volatile int exit_code = 0;
 
@@ -37,9 +38,10 @@ typedef enum {
     HANDLE_PHASE_START
     , HANDLE_PHASE_I2C = HANDLE_PHASE_START
     , HANDLE_PHASE_SPI
-    , HANDLE_PHASE_TUNER
     , HANDLE_PHASE_UART
+    , HANDLE_PHASE_TUNER
     , HANDLE_PHASE_EXTFLASH
+    , HANDLE_PHASE_CODEC
     , HANDLE_PHASE_LED
     , HANDLE_PHASE_MAX
 } HANDLE_PHASE;
@@ -52,11 +54,13 @@ const PFUNC Handle_FUNC[] = {
     //, Handle_Nop
     , Handle_SPI
     //, Handle_Nop
-    , Handle_TUNER
-    //, Handle_Nop
     , Handle_UART
     //, Handle_Nop
+    , Handle_TUNER
+    //, Handle_Nop
     , Handle_ExtFlash
+    //, Handle_Nop
+    , Handle_CODEC
     //, Handle_Nop
     , Handle_LED
     //, Handle_Nop
@@ -91,6 +95,7 @@ int main(void) {
             if (handle_idx >= HANDLE_PHASE_MAX) {
                 handle_idx = HANDLE_PHASE_START;
             }
+            Handle_WHEELTICK() ;
         } else {
             handle_idx = HANDLE_PHASE_START;
         }

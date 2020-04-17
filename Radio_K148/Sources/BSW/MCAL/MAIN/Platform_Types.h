@@ -72,6 +72,16 @@ typedef union {
     uint32_t        udata32 ;
     long int        data32 ;
     uint16_t        udata16 [2] ;
+    struct {
+        uint16_t    word_lsb ;
+        uint16_t    word_msb ;
+    };
+    struct {
+        uint8_t     lword_lsb ;
+        uint8_t     lword_msb ;
+        uint8_t     hword_lsb ;
+        uint8_t     hword_msb ;
+    };
     uint8_t         udata8 [4] ;
 } XDATA32, * pXDATA32 ;
 
@@ -149,4 +159,6 @@ typedef union {
 #define BIT_31                  (0x80000000U)
 
 typedef void (* PFUNC)(void) ;
+typedef void (* PFUNCvS)(status_t) ;
+typedef void (* PFUNCvpu8)(uint8 *) ;
 #endif /* _TYPEDEFS_H_ */

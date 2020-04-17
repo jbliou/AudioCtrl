@@ -6,3095 +6,4572 @@
  */
 
 
-#include "board.h"
 #include <stdio.h>
 #include <string.h>
+
+#include "board.h"
+#include "I2CMaster.h"
 
 #define _RADIO_TEF668X_INS_
 #include "TEF668x.h"
 
-void TEF668x_Handle (void) {
-    Tune_To(TEF668x_Buf, TEF668x_Module_Radio_FM, Tuning_Actions_Mode_Preset, 8930) ;
-}   // void TEF668x_Handle (void)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Tune_To
- * Description   : Tuning within the active radio band or tuning to a different
- *                 radio band with selection of FM / AM operation.
- * Parameters    :
- *END**************************************************************************/
-uint8_t Tune_To (uint8_t * buf, TEF668x_Module module, Tuning_Actions tuning_action_mode, uint16_t frequency) {
-    uint8_t     ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM || module == TEF668x_Module_Radio_AM) {
-        if (tuning_action_mode == Tuning_Actions_Mode_End) {
-            PSetTune_To_End pTune_To ;
-            XDATA16         tmp ;
-
-            pTune_To = (PSetTune_To_End)buf ;
-            memset (buf, '\0', sizeof (SSetTune_To_End)) ;
-
-            pTune_To->module                    = module ;
-            pTune_To->cmd                       = TEF668x_cmd_Tune_To ;
-            pTune_To->index                     = 1 ;
-
-            tmp.udata16                         = Tuning_Actions_Mode_End ;
-            pTune_To->tuning_actions_hi         = tmp.hibyte ;
-            pTune_To->tuning_actions_lo         = tmp.lobyte ;
-
-            ret_val                             = sizeof (SSetTune_To_End) ;
-        } else {
-            PSetTune_To pTune_To ;
-            XDATA16     tmp ;
-
-            pTune_To = (PSetTune_To)buf ;
-            memset (buf, '\0', sizeof (SSetTune_To)) ;
-
-            pTune_To->module                    = module ;
-            pTune_To->cmd                       = TEF668x_cmd_Tune_To ;
-            pTune_To->index                     = 1 ;
-
-            tmp.udata16                         = tuning_action_mode ;
-            pTune_To->tuning_actions_hi         = tmp.hibyte ;
-            pTune_To->tuning_actions_lo         = tmp.lobyte ;
-
-            tmp.udata16                         = frequency ;
-            pTune_To->tuning_frequency_hi       = tmp.hibyte ;
-            pTune_To->tuning_frequency_lo       = tmp.lobyte ;
-
-            ret_val                             = sizeof (SSetTune_To) ;
-        }
-    }
-
-    return (ret_val) ;
-}   // void Tune_To (uint8_t * buf, TEF668x_Module module, uint16_t action, uint16_t frequency)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_Tune_Options
- * Description   : Settings used during a tuning action (FM AF_Update).
- * Parameters    :
- *END**************************************************************************/
-uint8_t Set_Tune_Options (uint8_t * buf, TEF668x_Module module, uint16_t bw_mode, uint16_t bandwidth, uint16_t mute_time, uint16_t sample_time) {
-    uint8_t             ret_val = 0 ;
-
-    if (module          == TEF668x_Module_Radio_FM
-     && (bw_mode        == AFU_BW_MODE_FIXED            || bw_mode      == AFU_BW_MODE_AUTOMATIC_BANDWIDTH)
-     && (bandwidth      >= MIN_AFU_FIXED_IF_BANDWIDTH   && bandwidth    <= MAX_AFU_FIXED_IF_BANDWIDTH)
-     && (mute_time      >= MIN_AFU_MUTE_TIME            && mute_time    <= MAX_AFU_MUTE_TIME)
-     && (sample_time    >= MIN_AFU_SAMPLE_TIME          && sample_time  <= MAX_AFU_SAMPLE_TIME)
-    ) {
-        PSet_Tune_Options   pTune_Options ;
-        XDATA16             tmp ;
-
-        pTune_Options = (PSet_Tune_Options)buf ;
-        memset (buf, '\0', sizeof (SSet_Tune_Options)) ;
-
-        pTune_Options->module               = module ;
-        pTune_Options->cmd                  = TEF668x_cmd_Set_Tune_Options ;
-        pTune_Options->index                = 1 ;
-
-        tmp.udata16                         = bw_mode ;
-        pTune_Options->afu_bw_mode_hi       = tmp.hibyte ;
-        pTune_Options->afu_bw_mode_lo       = tmp.lobyte ;
-
-        tmp.udata16                         = bandwidth ;
-        pTune_Options->afu_bandwidth_hi     = tmp.hibyte ;
-        pTune_Options->afu_bandwidth_lo     = tmp.lobyte ;
-
-        tmp.udata16                         = mute_time ;
-        pTune_Options->afu_mute_time_hi     = tmp.hibyte ;
-        pTune_Options->afu_mute_time_lo     = tmp.lobyte ;
-
-        tmp.udata16                         = sample_time ;
-        pTune_Options->afu_sample_time_hi   = tmp.hibyte ;
-        pTune_Options->afu_sample_time_lo   = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_Tune_Options) ;
-    }
-
-    return (ret_val) ;
-}   // uint8_t Set_Tune_Options (uint8_t * buf, TEF668x_Module module, uint16_t bw_mode, uint16_t bandwidth, uint16_t mute_time, uint16_t sample_time)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_Bandwidth
- * Description   : Fixed bandwidth selection of the radio selectivity filter.
- *                 For FM automatic bandwidth control can be selected with
- *                 control sensitivity options.
- * Parameters    :
- *END**************************************************************************/
-uint8_t Set_Bandwidth(uint8_t * buf, TEF668x_Module module, IF_BandWidth_Control_Mode mode, uint16_t bandwidth, uint16_t control_sensitivity, uint16_t low_level_sensitivity, uint16_t min_bandwidth, uint16_t nominal_bandwidth, uint16_t control_attack) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM) {
-        PSet_Bandwidth_FM   pSet_Bandwidth ;
-        XDATA16             tmp ;
-
-        pSet_Bandwidth = (PSet_Bandwidth_FM)buf ;
-        memset (buf, '\0', sizeof (SSet_Bandwidth_FM)) ;
-
-        pSet_Bandwidth->module              = TEF668x_Module_Radio_FM ;
-        pSet_Bandwidth->cmd                 = TEF668x_cmd_Set_Bandwidth ;
-        pSet_Bandwidth->index               = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_Bandwidth->IF_bandwidth_control_mode_hi = tmp.hibyte ;
-        pSet_Bandwidth->IF_bandwidth_control_mode_lo = tmp.lobyte ;
-
-        tmp.udata16                         = bandwidth ;
-        pSet_Bandwidth->bandwidth_hi        = tmp.hibyte ;
-        pSet_Bandwidth->bandwidth_lo        = tmp.lobyte ;
-
-        tmp.udata16                         = control_sensitivity ;
-        pSet_Bandwidth->control_sensitivity_hi = tmp.hibyte ;
-        pSet_Bandwidth->control_sensitivity_lo = tmp.lobyte ;
-
-        tmp.udata16                         = low_level_sensitivity ;
-        pSet_Bandwidth->low_level_sensitivity_hi = tmp.hibyte ;
-        pSet_Bandwidth->low_level_sensitivity_lo = tmp.lobyte ;
-
-        tmp.udata16                         = min_bandwidth ;
-        pSet_Bandwidth->min_bandwidth_hi    = tmp.hibyte ;
-        pSet_Bandwidth->min_bandwidth_lo    = tmp.lobyte ;
-
-        tmp.udata16                         = nominal_bandwidth ;
-        pSet_Bandwidth->min_bandwidth_hi    = tmp.hibyte ;
-        pSet_Bandwidth->min_bandwidth_lo    = tmp.lobyte ;
-
-        tmp.udata16                         = nominal_bandwidth ;
-        pSet_Bandwidth->nominal_bandwidth_hi= tmp.hibyte ;
-        pSet_Bandwidth->nominal_bandwidth_lo= tmp.lobyte ;
-
-        tmp.udata16                         = control_attack ;
-        pSet_Bandwidth->control_attack_hi   = tmp.hibyte ;
-        pSet_Bandwidth->control_attack_lo   = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_Bandwidth_FM) ;
-    }   // if (module == TEF668x_Module_Radio_FM)
-    else if (module == TEF668x_Module_Radio_AM) {
-        PSet_Bandwidth_AM      pSet_Bandwidth ;
-        XDATA16             tmp ;
-
-        pSet_Bandwidth = (PSet_Bandwidth_AM)buf ;
-        memset (buf, '\0', sizeof (SSet_Bandwidth_AM)) ;
-
-        pSet_Bandwidth->module              = TEF668x_Module_Radio_AM ;
-        pSet_Bandwidth->cmd                 = TEF668x_cmd_Set_Bandwidth ;
-        pSet_Bandwidth->index               = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_Bandwidth->IF_bandwidth_control_mode_hi = tmp.hibyte ;
-        pSet_Bandwidth->IF_bandwidth_control_mode_lo = tmp.lobyte ;
-
-        tmp.udata16                         = bandwidth ;
-        pSet_Bandwidth->bandwidth_hi        = tmp.hibyte ;
-        pSet_Bandwidth->bandwidth_lo        = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_Bandwidth_AM) ;
-    }   // if (module == TEF668x_Module_Radio_AM)
-
-    return (ret_val) ;
-}   // uint8_t Set_Bandwidth(uint8_t * buf, TEF668x_Module module, IF_BandWidth_Control_Mode mode, uint16_t bandwidth, uint16_t control_sensitivity, uint16_t low_level_sensitivity, uint16_t min_bandwidth, uint16_t nominal_bandwidth, uint16_t control_attack)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_RFAGC
- * Description   : Start level of the tuner front-end AGC.
- *                 Performance balancing of desensitization (high start level)
- *                 against inter-modulation (low start level). ptional extension
- *                 of the FM RF AGC range with one step by external application
- *                 use.
- * Parameters    :
- *END**************************************************************************/
-uint8_t Set_RFAGC (uint8_t * buf, TEF668x_Module module, uint16_t start, uint16_t extension) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM || module == TEF668x_Module_Radio_AM) {
-        PSet_RFAGC          pSet_RFAGC ;
-        XDATA16             tmp ;
-
-        pSet_RFAGC = (PSet_RFAGC)buf ;
-        memset (buf, '\0', sizeof (SSet_RFAGC)) ;
-
-        pSet_RFAGC->module                  = module ;
-        pSet_RFAGC->cmd                     = TEF668x_cmd_Set_RFAGC ;
-        pSet_RFAGC->index                   = 1 ;
-
-        tmp.udata16                         = start ;
-        pSet_RFAGC->start_hi                = tmp.hibyte ;
-        pSet_RFAGC->start_lo                = tmp.lobyte ;
-
-        tmp.udata16                         = extension ;
-        pSet_RFAGC->extension_hi            = tmp.hibyte ;
-        pSet_RFAGC->extension_lo            = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_RFAGC) ;
-    }   // if (module == TEF668x_Module_Radio_FM || module == TEF668x_Module_Radio_AM)
-
-    return (ret_val) ;
-}   // uint8_t Set_RFAGC (uint8_t * buf, TEF668x_Module module, uint16_t start, uint16_t extension)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_Antenna
- * Description   : AM antenna attenuation control (RF AGC attenuation limit).
- *                 In case of an AM active antenna application part of the
- *                 required level correction can be located in the front-end.
- * Parameters    :
- *END**************************************************************************/
-uint8_t Set_Antenna (uint8_t * buf, TEF668x_Module module, LNA_Gain_Reduction_LEVEL attenuation) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_AM) {
-        PSet_Antenna        pSet_Antenna ;
-        XDATA16             tmp ;
-
-        pSet_Antenna = (PSet_Antenna)buf ;
-        memset (buf, '\0', sizeof (SSet_Antenna)) ;
-
-        pSet_Antenna->module                = TEF668x_Module_Radio_AM ;
-        pSet_Antenna->cmd                   = TEF668x_cmd_Set_Antenna ;
-        pSet_Antenna->index                 = 1 ;
-
-        tmp.udata16                         = attenuation ;
-        pSet_Antenna->attenuation_hi        = tmp.hibyte ;
-        pSet_Antenna->attenuation_lo        = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_Antenna) ;
-    }   // if (module == TEF668x_Module_Radio_AM)
-
-    return (ret_val) ;
-}   // uint8_t Set_Antenna (uint8_t * buf, TEF668x_Module module, LNA_Gain_Reduction_LEVEL attenuation)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_CoChannelDet
- * Description   : Control of the AM co-channel detector.
- *                 The AM co-channel detector searches for sub-sonic audio content
- *                 as may be found during conditions where the AM channel is
- *                 disturbed by the signal from a different station transmitting
- *                 on the same channel but with a slightly different carrier
- *                 frequency.
- * Parameters    :
- *END**************************************************************************/
-uint8_t Set_CoChannelDet (uint8_t * buf, TEF668x_Module module, uint16_t restart, uint16_t sensitivity, uint16_t count) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_AM) {
-        PCoChannelDet       pCoChannelDet ;
-        XDATA16             tmp ;
-
-        pCoChannelDet = (PCoChannelDet)buf ;
-        memset (buf, '\0', sizeof (SCoChannelDet)) ;
-
-        pCoChannelDet->module               = TEF668x_Module_Radio_AM ;
-        pCoChannelDet->cmd                  = TEF668x_cmd_Set_CoChannelDet ;
-        pCoChannelDet->index                = 1 ;
-
-        tmp.udata16                         = 1 ;
-        pCoChannelDet->mode_hi              = tmp.hibyte ;
-        pCoChannelDet->mode_lo              = tmp.lobyte ;
-
-        tmp.udata16                         = restart ;
-        pCoChannelDet->restart_hi           = tmp.hibyte ;
-        pCoChannelDet->restart_lo           = tmp.lobyte ;
-
-        tmp.udata16                         = sensitivity ;
-        pCoChannelDet->sensitivity_hi       = tmp.hibyte ;
-        pCoChannelDet->sensitivity_lo       = tmp.lobyte ;
-
-        tmp.udata16                         = count ;
-        pCoChannelDet->count_hi             = tmp.hibyte ;
-        pCoChannelDet->count_lo             = tmp.lobyte ;
-
-        ret_val                             = sizeof (SCoChannelDet) ;
-    }   // if (module == TEF668x_Module_Radio_AM)
-
-    return (ret_val) ;
-}   // uint8_t Set_CoChannelDet (uint8_t * buf, TEF668x_Module module, uint16_t restart, uint16_t sensitivity, uint16_t count)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_MphSuppression
- * Description   : Optional use of the �MS�� FM multiple path suppression system.
- *
- * Parameters    : Enable/Disable the Multiple path suppression
- *END**************************************************************************/
-uint8_t Set_MphSuppression (uint8_t * buf, TEF668x_Module module, OP_MODE mode) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM) {
-        PSet_MphSuppression pSet_MphSuppression ;
-        XDATA16             tmp ;
-
-        pSet_MphSuppression = (PSet_MphSuppression)buf ;
-        memset (buf, '\0', sizeof (SSet_MphSuppression)) ;
-
-        pSet_MphSuppression->module         = TEF668x_Module_Radio_FM ;
-        pSet_MphSuppression->cmd            = TEF668x_cmd_Set_MphSuppression ;
-        pSet_MphSuppression->index          = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_MphSuppression->mode_hi        = tmp.hibyte ;
-        pSet_MphSuppression->mode_lo        = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_MphSuppression) ;
-    }   // if (module == TEF668x_Module_Radio_FM)
-
-    return (ret_val) ;
-}   // uint8_t Set_MphSuppression (uint8_t * buf, TEF668x_Module module, OP_MODE mode)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_ChannelEqualizer
- * Description   : Optional use of the FM channel equalizer.
- *
- * Parameters    : Enable/Disable the channel equalizer
- *END**************************************************************************/
-uint8_t Set_ChannelEqualizer (uint8_t * buf, TEF668x_Module module, OP_MODE mode) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM) {
-        PSet_ChannelEqualizer   pSet_ChannelEqualizer ;
-        XDATA16                 tmp ;
-
-        pSet_ChannelEqualizer = (PSet_ChannelEqualizer)buf ;
-        memset (buf, '\0', sizeof (SSet_ChannelEqualizer)) ;
-
-        pSet_ChannelEqualizer->module       = TEF668x_Module_Radio_FM ;
-        pSet_ChannelEqualizer->cmd          = TEF668x_cmd_Set_ChannelEqualizer ;
-        pSet_ChannelEqualizer->index        = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_ChannelEqualizer->mode_hi      = tmp.hibyte ;
-        pSet_ChannelEqualizer->mode_lo      = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_ChannelEqualizer) ;
-    }   // if (module == TEF668x_Module_Radio_FM)
-
-    return (ret_val) ;
-}   // uint8_t Set_ChannelEqualizer (uint8_t * buf, TEF668x_Module module, OP_MODE mode)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_NoiseBlanker
- * Description   : Noise blanker options and sensitivity setting.
- * Parameters    :
- *END**************************************************************************/
-uint8_t Set_NoiseBlanker (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t sensitivity, uint16_t modulation_gain, uint16_t offset_blank_time, uint16_t attack, uint16_t decay) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM) {
-        PSet_NoiseBlanker_FM    pSet_NoiseBlanker_FM ;
-        XDATA16             tmp ;
-
-        pSet_NoiseBlanker_FM = (PSet_NoiseBlanker_FM)buf ;
-        memset (buf, '\0', sizeof (SSet_NoiseBlanker_FM)) ;
-
-        pSet_NoiseBlanker_FM->module        = TEF668x_Module_Radio_FM ;
-        pSet_NoiseBlanker_FM->cmd           = TEF668x_cmd_Set_NoiseBlanker ;
-        pSet_NoiseBlanker_FM->index         = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_NoiseBlanker_FM->mode_hi       = tmp.hibyte ;
-        pSet_NoiseBlanker_FM->mode_lo       = tmp.lobyte ;
-
-        tmp.udata16                         = sensitivity ;
-        pSet_NoiseBlanker_FM->sensitivity_hi= tmp.hibyte ;
-        pSet_NoiseBlanker_FM->sensitivity_lo= tmp.lobyte ;
-
-        tmp.udata16                         = modulation_gain ;
-        pSet_NoiseBlanker_FM->modulation_hi = tmp.hibyte ;
-        pSet_NoiseBlanker_FM->modulation_lo = tmp.lobyte ;
-
-        tmp.udata16                         = offset_blank_time ;
-        pSet_NoiseBlanker_FM->offset_hi     = tmp.hibyte ;
-        pSet_NoiseBlanker_FM->offset_lo     = tmp.lobyte ;
-
-        tmp.udata16                         = attack ;
-        pSet_NoiseBlanker_FM->attack_hi     = tmp.hibyte ;
-        pSet_NoiseBlanker_FM->attack_lo     = tmp.lobyte ;
-
-        tmp.udata16                         = decay ;
-        pSet_NoiseBlanker_FM->decay_hi      = tmp.hibyte ;
-        pSet_NoiseBlanker_FM->decay_lo      = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_NoiseBlanker_FM) ;
-    }   // if (module == TEF668x_Module_Radio_FM)
-    else if (module == TEF668x_Module_Radio_AM) {
-        PSet_NoiseBlanker_AM    pSet_NoiseBlanker_AM ;
-        XDATA16             tmp ;
-
-        pSet_NoiseBlanker_AM = (PSet_NoiseBlanker_AM)buf ;
-        memset (buf, '\0', sizeof (SSet_NoiseBlanker_AM)) ;
-
-        pSet_NoiseBlanker_AM->module        = TEF668x_Module_Radio_AM ;
-        pSet_NoiseBlanker_AM->cmd           = TEF668x_cmd_Set_NoiseBlanker ;
-        pSet_NoiseBlanker_AM->index         = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_NoiseBlanker_AM->mode_hi       = tmp.hibyte ;
-        pSet_NoiseBlanker_AM->mode_lo       = tmp.lobyte ;
-
-        tmp.udata16                         = sensitivity ;
-        pSet_NoiseBlanker_AM->sensitivity_hi= tmp.hibyte ;
-        pSet_NoiseBlanker_AM->sensitivity_lo= tmp.lobyte ;
-
-        tmp.udata16                         = modulation_gain ;
-        pSet_NoiseBlanker_AM->gain_hi       = tmp.hibyte ;
-        pSet_NoiseBlanker_AM->gain_lo       = tmp.lobyte ;
-
-        tmp.udata16                         = offset_blank_time ;
-        pSet_NoiseBlanker_AM->blank_time_hi = tmp.hibyte ;
-        pSet_NoiseBlanker_AM->blank_time_lo = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_NoiseBlanker_AM) ;
-    }
-
-    return (ret_val) ;
-}   // uint8_t Set_NoiseBlanker (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t sensitivity, uint16_t modulation_gain, uint16_t offset_blank_time, uint16_t attack, uint16_t decay)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_NoiseBlanker_Options
- * Description   : Extended API control options of the FM noise blanker.
- * Parameters    :
- *END**************************************************************************/
-uint8_t Set_NoiseBlanker_Options (uint8_t * buf, TEF668x_Module module, uint16_t blank_time, uint16_t blank_time2, uint16_t blank_modulation) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM) {
-        PSet_NoiseBlanker_Options   pSet_NoiseBlanker_Options ;
-        XDATA16                     tmp ;
-
-        pSet_NoiseBlanker_Options = (PSet_NoiseBlanker_Options)buf ;
-        memset (buf, '\0', sizeof (SSet_NoiseBlanker_Options)) ;
-
-        pSet_NoiseBlanker_Options->module   = TEF668x_Module_Radio_FM ;
-        pSet_NoiseBlanker_Options->cmd      = TEF668x_cmd_Set_NoiseBlanker_Options ;
-        pSet_NoiseBlanker_Options->index    = 1 ;
-
-        tmp.udata16                         = blank_time ;
-        pSet_NoiseBlanker_Options->blank_time_hi    = tmp.hibyte ;
-        pSet_NoiseBlanker_Options->blank_time_lo    = tmp.lobyte ;
-
-        tmp.udata16                         = blank_time2 ;
-        pSet_NoiseBlanker_Options->blank_time2_hi   = tmp.hibyte ;
-        pSet_NoiseBlanker_Options->blank_time2_lo   = tmp.lobyte ;
-
-        tmp.udata16                         = blank_modulation ;
-        pSet_NoiseBlanker_Options->blank_modulation_hi  = tmp.hibyte ;
-        pSet_NoiseBlanker_Options->blank_modulation_lo  = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_NoiseBlanker_Options) ;
-    }   // if (module == TEF668x_Module_Radio_FM)
-
-    return (ret_val) ;
-}   // uint8_t Set_NoiseBlanker_Options (uint8_t * buf, TEF668x_Module module, uint16_t blank_time, uint16_t blank_time2, uint16_t blank_modulation)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_NoiseBlanker_Audio
- * Description   : AM Audio noise blanker options and sensitivity setting.
- * Parameters    :
- *END**************************************************************************/
-uint8_t Set_NoiseBlanker_Audio (uint8_t * buf, TEF668x_Module module, OP_MODE mode,
-                                uint16_t sensitivity, uint16_t blank_time) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_AM) {
-        PSet_NoiseBlanker_Audio     pSet_NoiseBlanker_Audio ;
-        XDATA16                     tmp ;
-
-        pSet_NoiseBlanker_Audio = (PSet_NoiseBlanker_Audio)buf ;
-        memset (buf, '\0', sizeof (SSet_NoiseBlanker_Audio)) ;
-
-        pSet_NoiseBlanker_Audio->module     = TEF668x_Module_Radio_AM ;
-        pSet_NoiseBlanker_Audio->cmd        = TEF668x_cmd_Set_NoiseBlanker_Audio ;
-        pSet_NoiseBlanker_Audio->index      = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_NoiseBlanker_Audio->mode_hi    = tmp.hibyte ;
-        pSet_NoiseBlanker_Audio->mode_lo    = tmp.lobyte ;
-
-        tmp.udata16                         = sensitivity ;
-        pSet_NoiseBlanker_Audio->sensitivity_hi = tmp.hibyte ;
-        pSet_NoiseBlanker_Audio->sensitivity_lo = tmp.lobyte ;
-
-        tmp.udata16                         = blank_time ;
-        pSet_NoiseBlanker_Audio->blank_time_hi  = tmp.hibyte ;
-        pSet_NoiseBlanker_Audio->blank_time_lo  = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_NoiseBlanker_Audio) ;
-    }   // if (module == TEF668x_Module_Radio_AM)
-
-    return (ret_val) ;
-}   // uint8_t Set_NoiseBlanker_Audio (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t sensitivity, uint16_t blank_time)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_DigitalRadio
- * Description   : Available for TEF6688 and TEF6689 only.
- *                 Enabling of I/O signal lines for external digital radio processor;
- *                 DR I簡S output and DR Blend input (enabling DR audio input from
- *                 IIS_SD_0).
- * Parameters    :
- *END**************************************************************************/
-uint8_t Set_DigitalRadio (uint8_t * buf, TEF668x_Module module, OP_MODE mode) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_AM || module == TEF668x_Module_Radio_FM) {
-        PSet_DigitalRadio   pSet_DigitalRadio ;
-        XDATA16             tmp ;
-
-        pSet_DigitalRadio = (PSet_DigitalRadio)buf ;
-        memset (buf, '\0', sizeof (SSet_DigitalRadio)) ;
-
-        pSet_DigitalRadio->module           = module ;
-        pSet_DigitalRadio->cmd              = TEF668x_cmd_Set_DigitalRadio ;
-        pSet_DigitalRadio->index            = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_DigitalRadio->mode_hi          = tmp.hibyte ;
-        pSet_DigitalRadio->mode_lo          = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_DigitalRadio) ;
-    }   // if (module == TEF668x_Module_Radio_AM || module == TEF668x_Module_Radio_FM)
-
-    return (ret_val) ;
-}   // uint8_t Set_DigitalRadio (uint8_t * buf, TEF668x_Module module, OP_MODE mode)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_Deemphasis
- * Description   : Selection of FM deemphasis time constant.
- * Parameters    :
- *END**************************************************************************/
-uint8_t Set_Deemphasis (uint8_t * buf, TEF668x_Module module, DeemphasisTimeConstant_Mode mode) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM) {
-        PSet_Deemphasis     pSet_Deemphasis ;
-        XDATA16             tmp ;
-
-        pSet_Deemphasis = (PSet_Deemphasis)buf ;
-        memset (buf, '\0', sizeof (SSet_Deemphasis)) ;
-
-        pSet_Deemphasis->module             = TEF668x_Module_Radio_FM ;
-        pSet_Deemphasis->cmd                = TEF668x_cmd_Set_Deemphasis ;
-        pSet_Deemphasis->index              = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_Deemphasis->timeconstant_hi    = tmp.hibyte ;
-        pSet_Deemphasis->timeconstant_lo    = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_Deemphasis) ;
-    }   // if (module == TEF668x_Module_Radio_AM || module == TEF668x_Module_Radio_FM)
-
-    return (ret_val) ;
-}   // uint8_t Set_Deemphasis (uint8_t * buf, TEF668x_Module module, DeemphasisTimeConstant_Mode mode)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_StereoImprovement
- * Description   : Available for TEF6687 and TEF6689 only.
- *                 Selection of extended stereo weak signal handling; stereo high
- *                 blend (default operation) or special FMSI (FM stereo improvement)
- *                 blend system for improved sound quality.
- * Parameters    :
- *END**************************************************************************/
-uint8_t Set_StereoImprovement (uint8_t * buf, TEF668x_Module module, StereoImprovement_Mode mode) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM) {
-        PSet_StereoImprovement  pSet_StereoImprovement ;
-        XDATA16                 tmp ;
-
-        pSet_StereoImprovement = (PSet_StereoImprovement)buf ;
-        memset (buf, '\0', sizeof (SSet_StereoImprovement)) ;
-
-        pSet_StereoImprovement->module      = TEF668x_Module_Radio_FM ;
-        pSet_StereoImprovement->cmd         = TEF668x_cmd_Set_StereoImprovement ;
-        pSet_StereoImprovement->index       = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_StereoImprovement->mode_hi     = tmp.hibyte ;
-        pSet_StereoImprovement->mode_lo     = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_StereoImprovement) ;
-    }   // if (module == TEF668x_Module_Radio_FM)
-
-    return (ret_val) ;
-}   // uint8_t Set_StereoImprovement (uint8_t * buf, TEF668x_Module module, StereoImprovement_Mode mode)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_LevelStep
- * Description   : Selection of level correction as a function of the tuner
- *                 front-end AGC.
- *                 The level step offset is included in the weak signal handling
- *                 and the level read value of Get_Quality
- *                 (4.1 FM / AM cmd 128 / 129   Get_Quality). A setting of 0 dB
- *                 will show no level change by full compensation of the actual
- *                 -6 dB AGC attenuation step. Instead a setting of -6 dB will
- *                 show the actual AGC attenuation step.
- * Parameters    :
- *END**************************************************************************/
-uint8_t Set_LevelStep (uint8_t * buf, TEF668x_Module module, int16_t step1, int16_t step2, int16_t step3, int16_t step4, int16_t step5, int16_t step6, int16_t step7) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM || module == TEF668x_Module_Radio_AM) {
-        PSet_LevelStep          pSet_LevelStep ;
-        XDATA16                 tmp ;
-
-        pSet_LevelStep = (PSet_LevelStep)buf ;
-        memset (buf, '\0', sizeof (SSet_LevelStep)) ;
-
-        pSet_LevelStep->module              = module ;
-        pSet_LevelStep->cmd                 = TEF668x_cmd_Set_LevelStep ;
-        pSet_LevelStep->index               = 1 ;
-
-        tmp.data16                          = step1 ;
-        pSet_LevelStep->step1_hi            = tmp.hibyte ;
-        pSet_LevelStep->step1_lo            = tmp.lobyte ;
-
-        tmp.data16                          = step2 ;
-        pSet_LevelStep->step2_hi            = tmp.hibyte ;
-        pSet_LevelStep->step2_lo            = tmp.lobyte ;
-
-        tmp.data16                          = step3 ;
-        pSet_LevelStep->step3_hi            = tmp.hibyte ;
-        pSet_LevelStep->step3_lo            = tmp.lobyte ;
-
-        tmp.data16                          = step4 ;
-        pSet_LevelStep->step4_hi            = tmp.hibyte ;
-        pSet_LevelStep->step4_lo            = tmp.lobyte ;
-
-        tmp.data16                          = step5 ;
-        pSet_LevelStep->step5_hi            = tmp.hibyte ;
-        pSet_LevelStep->step5_lo            = tmp.lobyte ;
-
-        tmp.data16                          = step6 ;
-        pSet_LevelStep->step6_hi            = tmp.hibyte ;
-        pSet_LevelStep->step6_lo            = tmp.lobyte ;
-
-        tmp.data16                          = step7 ;
-        pSet_LevelStep->step7_hi            = tmp.hibyte ;
-        pSet_LevelStep->step7_lo            = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_LevelStep) ;
-    }   // if (module == TEF668x_Module_Radio_AM || module == TEF668x_Module_Radio_FM)
-
-    return (ret_val) ;
-}   // uint8_t Set_LevelStep (uint8_t * buf, TEF668x_Module module, int16_t step1, int16_t step2, int16_t step3, int16_t step4, int16_t step5, int16_t step6, int16_t step7)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_LevelOffset
- * Description   : Selection of level correction.
- *                 The level offset can be used as an overall correction for
- *                 antenna noise level and is included in the weak signal handling
- *                 and the level read value of Get_Quality (4.1 FM / AM cmd 128
- *                 / 129   Get_Quality). A standard use case is the compensation
- *                 for AM active antenna circuits (typical offset setting = -30 dB).
- * Parameters    :
- *END**************************************************************************/
-uint8_t Set_LevelOffset (uint8_t * buf, TEF668x_Module module, int16_t offset) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM || module == TEF668x_Module_Radio_AM) {
-        PSet_LevelOffset        pSet_LevelOffset ;
-        XDATA16                 tmp ;
-
-        pSet_LevelOffset = (PSet_LevelOffset)buf ;
-        memset (buf, '\0', sizeof (SSet_LevelOffset)) ;
-
-        pSet_LevelOffset->module            = module ;
-        pSet_LevelOffset->cmd               = TEF668x_cmd_Set_LevelOffset ;
-        pSet_LevelOffset->index             = 1 ;
-
-        tmp.data16                          = offset ;
-        pSet_LevelOffset->offset_hi         = tmp.hibyte ;
-        pSet_LevelOffset->offset_lo         = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_LevelOffset) ;
-    }   // if (module == TEF668x_Module_Radio_AM || module == TEF668x_Module_Radio_FM)
-
-    return (ret_val) ;
-}   // uint8_t Set_LevelOffset (uint8_t * buf, TEF668x_Module module, int16_t offset)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_Softmute
- * Description   : Timing and quality sensitivity settings for the Softmute weak
- *                 signal handling.
- *                 �et_Softmute_Time�� defines the weak signal handling response
- *                 times active for the level detector and FM noise and multipath
- *                 detectors. Fast and slow response times are available for dual
- *                 timer functionality, with enable options at the level, noise
- *                 and mph commands.
- * Parameters    :
- *END**************************************************************************/
-uint8_t Set_Softmute (uint8_t * buf, TEF668x_Module module, uint16_t slow_attack, uint16_t slow_decay, uint16_t fast_attack, uint16_t fast_decay) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM || module == TEF668x_Module_Radio_AM) {
-        PSet_Softmute   pSet_Softmute ;
-        XDATA16         tmp ;
-
-        pSet_Softmute = (PSet_Softmute)buf ;
-        memset (buf, '\0', sizeof (SSet_Softmute)) ;
-
-        pSet_Softmute->module               = module ;
-        pSet_Softmute->cmd                  = TEF668x_cmd_Set_Softmute_Time ;
-        pSet_Softmute->index                = 1 ;
-
-        tmp.udata16                         = slow_attack ;
-        pSet_Softmute->slow_attack_hi       = tmp.hibyte ;
-        pSet_Softmute->slow_attack_lo       = tmp.lobyte ;
-
-        tmp.udata16                         = slow_decay ;
-        pSet_Softmute->slow_decay_hi        = tmp.hibyte ;
-        pSet_Softmute->slow_decay_lo        = tmp.lobyte ;
-
-        tmp.udata16                         = fast_attack ;
-        pSet_Softmute->fast_attack_hi       = tmp.hibyte ;
-        pSet_Softmute->fast_attack_lo       = tmp.lobyte ;
-
-        tmp.udata16                         = fast_decay ;
-        pSet_Softmute->fast_decay_hi        = tmp.hibyte ;
-        pSet_Softmute->fast_decay_lo        = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_Softmute) ;
-    }   // if (module == TEF668x_Module_Radio_AM || module == TEF668x_Module_Radio_FM)
-
-    return (ret_val) ;
-}   // uint8_t Set_Softmute (uint8_t * buf, TEF668x_Module module, uint16_t slow_attack, uint16_t slow_decay, uint16_t fast_attack, uint16_t fast_decay)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_Softmute_Mod
- * Description   : enables modulation dependency and sets sensitivity (AM only).
- * Parameters    :
- *END**************************************************************************/
-uint8_t Set_Softmute_Mod (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t start, uint16_t slope, uint16_t shift) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_AM) {
-        PSet_Softmute_Mod   pSet_Softmute_Mod ;
-        XDATA16             tmp ;
-
-        pSet_Softmute_Mod = (PSet_Softmute_Mod)buf ;
-        memset (buf, '\0', sizeof (SSet_Softmute_Mod)) ;
-
-        pSet_Softmute_Mod->module           = TEF668x_Module_Radio_AM ;
-        pSet_Softmute_Mod->cmd              = TEF668x_cmd_Set_Softmute_Mod ;
-        pSet_Softmute_Mod->index            = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_Softmute_Mod->mode_hi          = tmp.hibyte ;
-        pSet_Softmute_Mod->mode_lo          = tmp.lobyte ;
-
-        tmp.udata16                         = start ;
-        pSet_Softmute_Mod->start_hi         = tmp.hibyte ;
-        pSet_Softmute_Mod->start_lo         = tmp.lobyte ;
-
-        tmp.udata16                         = slope ;
-        pSet_Softmute_Mod->slope_hi         = tmp.hibyte ;
-        pSet_Softmute_Mod->slope_lo         = tmp.lobyte ;
-
-        tmp.udata16                         = shift ;
-        pSet_Softmute_Mod->shift_hi         = tmp.hibyte ;
-        pSet_Softmute_Mod->shift_lo         = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_Softmute_Mod) ;
-    }   // if (module == TEF668x_Module_Radio_AM)
-
-    return (ret_val) ;
-}   // uint8_t Set_Softmute_Mod (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t start, uint16_t slope, uint16_t shift)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_Softmute_Level
- * Description   : sets the level sensitivity and enables slow and fast timing.
- * Parameters    :
- *END**************************************************************************/
-uint8_t Set_Softmute_Level (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_AM || module == TEF668x_Module_Radio_FM) {
-        PSet_Softmute_Level pSet_Softmute_Level ;
-        XDATA16             tmp ;
-
-        pSet_Softmute_Level = (PSet_Softmute_Level)buf ;
-        memset (buf, '\0', sizeof (SSet_Softmute_Level)) ;
-
-        pSet_Softmute_Level->module         = module ;
-        pSet_Softmute_Level->cmd            = TEF668x_cmd_Set_Softmute_Level ;
-        pSet_Softmute_Level->index            = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_Softmute_Level->mode_hi        = tmp.hibyte ;
-        pSet_Softmute_Level->mode_lo        = tmp.lobyte ;
-
-        tmp.udata16                         = start ;
-        pSet_Softmute_Level->start_hi       = tmp.hibyte ;
-        pSet_Softmute_Level->start_lo       = tmp.lobyte ;
-
-        tmp.udata16                         = slope ;
-        pSet_Softmute_Level->slope_hi       = tmp.hibyte ;
-        pSet_Softmute_Level->slope_lo       = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_Softmute_Level) ;
-    }   // if (module == TEF668x_Module_Radio_AM || module == TEF668x_Module_Radio_FM)
-
-    return (ret_val) ;
-}   // uint8_t Set_Softmute_Level (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_Softmute_Noise
- * Description   : set the noise and multiple path sensitivity and enables slow
- *                 and fast timing (FM only).
- * Parameters    :
- *END**************************************************************************/
-uint8_t Set_Softmute_Noise (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM) {
-        PSet_Softmute_Noise pSet_Softmute_Noise ;
-        XDATA16             tmp ;
-
-        pSet_Softmute_Noise = (PSet_Softmute_Noise)buf ;
-        memset (buf, '\0', sizeof (SSet_Softmute_Noise)) ;
-
-        pSet_Softmute_Noise->module         = TEF668x_Module_Radio_FM ;
-        pSet_Softmute_Noise->cmd            = TEF668x_cmd_Set_Softmute_Noise ;
-        pSet_Softmute_Noise->index            = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_Softmute_Noise->mode_hi        = tmp.hibyte ;
-        pSet_Softmute_Noise->mode_lo        = tmp.lobyte ;
-
-        tmp.udata16                         = start ;
-        pSet_Softmute_Noise->start_hi       = tmp.hibyte ;
-        pSet_Softmute_Noise->start_lo       = tmp.lobyte ;
-
-        tmp.udata16                         = slope ;
-        pSet_Softmute_Noise->slope_hi       = tmp.hibyte ;
-        pSet_Softmute_Noise->slope_lo       = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_Softmute_Noise) ;
-    }   // if (module == TEF668x_Module_Radio_FM)
-
-    return (ret_val) ;
-}   // uint8_t Set_Softmute_Noise (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_Softmute_Mph
- * Description   : set the noise and multiple path sensitivity and enables slow
- *                 and fast timing (FM only).
- * Parameters    :
- *END**************************************************************************/
-uint8_t Set_Softmute_Mph (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM) {
-        PSet_Softmute_Mph   pSet_Softmute_Mph ;
-        XDATA16             tmp ;
-
-        pSet_Softmute_Mph = (PSet_Softmute_Mph)buf ;
-        memset (buf, '\0', sizeof (SSet_Softmute_Mph)) ;
-
-        pSet_Softmute_Mph->module           = TEF668x_Module_Radio_FM ;
-        pSet_Softmute_Mph->cmd              = TEF668x_cmd_Set_Softmute_Mph ;
-        pSet_Softmute_Mph->index            = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_Softmute_Mph->mode_hi          = tmp.hibyte ;
-        pSet_Softmute_Mph->mode_lo          = tmp.lobyte ;
-
-        tmp.udata16                         = start ;
-        pSet_Softmute_Mph->start_hi         = tmp.hibyte ;
-        pSet_Softmute_Mph->start_lo         = tmp.lobyte ;
-
-        tmp.udata16                         = slope ;
-        pSet_Softmute_Mph->slope_hi         = tmp.hibyte ;
-        pSet_Softmute_Mph->slope_lo         = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_Softmute_Mph) ;
-    }   // if (module == TEF668x_Module_Radio_FM)
-
-    return (ret_val) ;
-}   // uint8_t Set_Softmute_Mph (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_Softmute_Max
- * Description   : enables and defines the maximum amount of softmute attenuation
- *                 (as realized for poor signal conditions)..
- * Parameters    :
- *                 mode : weak signal handling (dynamic control)
- *                        0 : off (for evaluation only)
- *                        1 : on; maximum dynamic control defined by limit parameter (default)
- *                 limit : softmute dynamic attenuation limit
- *                        0 �� 400 [*0.1 dB] = 0 �� 40 dB  softmute maximum attenuation
- *                        200 = 20 dB (FM default) / 250 = 25 dB (AM default)
- *END**************************************************************************/
-uint8_t Set_Softmute_Max (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t limit) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM || module == TEF668x_Module_Radio_AM) {
-        PSet_Softmute_Max   pSet_Softmute_Max ;
-        XDATA16             tmp ;
-
-        pSet_Softmute_Max = (PSet_Softmute_Max)buf ;
-        memset (buf, '\0', sizeof (SSet_Softmute_Max)) ;
-
-        pSet_Softmute_Max->module           = module ;
-        pSet_Softmute_Max->cmd              = TEF668x_cmd_Set_Softmute_Max ;
-        pSet_Softmute_Max->index            = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_Softmute_Max->mode_hi          = tmp.hibyte ;
-        pSet_Softmute_Max->mode_lo          = tmp.lobyte ;
-
-        tmp.udata16                         = limit ;
-        pSet_Softmute_Max->limit_hi         = tmp.hibyte ;
-        pSet_Softmute_Max->limit_lo         = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_Softmute_Max) ;
-    }   // if (module == TEF668x_Module_Radio_FM || module == TEF668x_Module_Radio_AM)
-
-    return (ret_val) ;
-}   // uint8_t Set_Softmute_Max (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t limit)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_Highcut_Time
- * Description   : defines the weak signal handling response times active for the
- *                 level detector and FM noise and multiple path detectors.
- *                 Fast and slow response times are available for dual timer
- *                 functionality, with enable options at the level, noise and mph
- *                 commands.��.
- * Parameters    :
- *                 slow_attack : slow attack time of weak signal handling
- *                        60 �� 2000 (ms) = 60 ms �� 2 s slow attack time
- *                        500 = 500 ms (default)
- *                 slow_decay : slow decay time of weak signal handling
- *                        120 �� 12500 (ms) = 120 ms �� 12.5 s slow attack time
- *                        2000 = 2 s (default)
- *                 fast_attack : fast attack time of weak signal handling
- *                        10 �� 1200 (*0.1 ms) = 1 ms �� 120 ms fast attack time
- *                        20 = 2 ms (FM default) / 120 = 12 ms (AM default)
- *                 fast_decay : fast decay time of weak signal handling
- *                        20 �� 5000 (*0.1 ms) = 2 ms �� 500 ms fast attack time
- *                        20 = 2 ms (FM default) / 500 = 50 ms (AM default)
- *END**************************************************************************/
-uint8_t Set_Highcut_Time (uint8_t * buf, TEF668x_Module module, uint16_t slow_attack, uint16_t slow_decay, uint16_t fast_attack, uint16_t fast_decay) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM || module == TEF668x_Module_Radio_AM) {
-        PSet_Highcut_Time   pSet_Highcut_Time ;
-        XDATA16             tmp ;
-
-        pSet_Highcut_Time = (PSet_Highcut_Time)buf ;
-        memset (buf, '\0', sizeof (SSet_Highcut_Time)) ;
-
-        pSet_Highcut_Time->module           = module ;
-        pSet_Highcut_Time->cmd              = TEF668x_cmd_Set_Highcut_Time ;
-        pSet_Highcut_Time->index            = 1 ;
-
-        tmp.udata16                         = slow_attack ;
-        pSet_Highcut_Time->slow_attack_hi   = tmp.hibyte ;
-        pSet_Highcut_Time->slow_attack_lo   = tmp.lobyte ;
-
-        tmp.udata16                         = slow_decay ;
-        pSet_Highcut_Time->slow_decay_hi    = tmp.hibyte ;
-        pSet_Highcut_Time->slow_decay_lo    = tmp.lobyte ;
-
-        tmp.udata16                         = fast_attack ;
-        pSet_Highcut_Time->fast_attack_hi   = tmp.hibyte ;
-        pSet_Highcut_Time->fast_attack_lo   = tmp.lobyte ;
-
-        tmp.udata16                         = fast_decay ;
-        pSet_Highcut_Time->fast_decay_hi    = tmp.hibyte ;
-        pSet_Highcut_Time->fast_decay_lo    = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_Highcut_Time) ;
-    }   // if (module == TEF668x_Module_Radio_FM || module == TEF668x_Module_Radio_AM)
-
-    return (ret_val) ;
-}   // uint8_t Set_Highcut_Time (uint8_t * buf, TEF668x_Module module, uint16_t slow_attack, uint16_t slow_decay, uint16_t fast_attack, uint16_t fast_decay)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_Highcut_Mod
- * Description   : enables modulation dependency and sets sensitivity.
- * Parameters    :
- *                 mode : slow attack time of weak signal handling
- *                        0 = off (default)
- *                        1 = on (independent modulation timer)
- *                 start : slow decay time of weak signal handling
- *                        100 �� 1000 [*0.1 %] = control when modulation falls below 10% �� 100%
- *                        250 = 25% (default)
- *                        (note: for FM band 100% modulation equals 75 kHz deviation)
- *                 slope : weak signal handling modulation range
- *                        30 �� 1000 (*0.1 %) = control over modulation range of 3% �� 100%
- *                        130 = 13% (default)
- *                 shift : weak signal handling control shift
- *                        50 �� 1000 (*0.1 %) = maximum weak signal control shift of 5% �� 100%
- *                        500 = 50% (default)
- *                        (percentage of the linear control range from _Min limit to _Max limit)
- *END**************************************************************************/
-uint8_t Set_Highcut_Mod (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t start, uint16_t slope, uint16_t shift) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM || module == TEF668x_Module_Radio_AM) {
-        PSet_Highcut_Mod    pSet_Highcut_Mod ;
-        XDATA16             tmp ;
-
-        pSet_Highcut_Mod = (PSet_Highcut_Mod)buf ;
-        memset (buf, '\0', sizeof (SSet_Highcut_Mod)) ;
-
-        pSet_Highcut_Mod->module            = module ;
-        pSet_Highcut_Mod->cmd               = TEF668x_cmd_Set_Highcut_Mod ;
-        pSet_Highcut_Mod->index             = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_Highcut_Mod->mode_hi           = tmp.hibyte ;
-        pSet_Highcut_Mod->mode_lo           = tmp.lobyte ;
-
-        tmp.udata16                         = start ;
-        pSet_Highcut_Mod->start_hi          = tmp.hibyte ;
-        pSet_Highcut_Mod->start_lo          = tmp.lobyte ;
-
-        tmp.udata16                         = slope ;
-        pSet_Highcut_Mod->slope_hi          = tmp.hibyte ;
-        pSet_Highcut_Mod->slope_lo          = tmp.lobyte ;
-
-        tmp.udata16                         = shift ;
-        pSet_Highcut_Mod->shift_hi          = tmp.hibyte ;
-        pSet_Highcut_Mod->shift_lo          = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_Highcut_Mod) ;
-    }   // if (module == TEF668x_Module_Radio_FM || module == TEF668x_Module_Radio_AM)
-
-    return (ret_val) ;
-}   // uint8_t Set_Highcut_Mod (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t start, uint16_t slope, uint16_t shift)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_Highcut_Level
- * Description   : enables modulation dependency and sets sensitivity.
- * Parameters    :
- *                 mode : timer selection
- *                        0 = off (only for evaluation)
- *                        1 = fast timer control
- *                        2 = slow timer control (AM default)
- *                        3 = dual timer control; combined fast and slow timer control (FM default)
- *                 start : weak signal handling level start
- *                        200 �� 600 [*0.1 dB�V] = control when level is below 20 dBuV �� 60 dBuV
- *                        360 = 36 dB�V (FM default) / 400 = 40 dB�V (AM default)
- *                 slope : weak signal handling level range
- *                        60 �� 300 [*0.1 dB] = control over level range of 6 dB �� 30 dB
- *                        300 = 30 dB (FM default) / 200 = 20 dB (AM default)
- *END**************************************************************************/
-uint8_t Set_Highcut_Level (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM || module == TEF668x_Module_Radio_AM) {
-        PSet_Highcut_Level  pSet_Highcut_Level ;
-        XDATA16             tmp ;
-
-        pSet_Highcut_Level = (PSet_Highcut_Level)buf ;
-        memset (buf, '\0', sizeof (SSet_Highcut_Level)) ;
-
-        pSet_Highcut_Level->module          = module ;
-        pSet_Highcut_Level->cmd             = TEF668x_cmd_Set_Highcut_Level ;
-        pSet_Highcut_Level->index           = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_Highcut_Level->mode_hi         = tmp.hibyte ;
-        pSet_Highcut_Level->mode_lo         = tmp.lobyte ;
-
-        tmp.udata16                         = start ;
-        pSet_Highcut_Level->start_hi        = tmp.hibyte ;
-        pSet_Highcut_Level->start_lo        = tmp.lobyte ;
-
-        tmp.udata16                         = slope ;
-        pSet_Highcut_Level->slope_hi        = tmp.hibyte ;
-        pSet_Highcut_Level->slope_lo        = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_Highcut_Level) ;
-    }   // if (module == TEF668x_Module_Radio_FM || module == TEF668x_Module_Radio_AM)
-
-    return (ret_val) ;
-}   // uint8_t Set_Highcut_Level (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_Highcut_Noise
- * Description   : set the noise and multiple path sensitivity and enables slow
- *                 and fast timing (FM only)
- * Parameters    :
- *                 mode : timer selection
- *                        0 = off (only for evaluation)
- *                        1 = fast timer control
- *                        2 = slow timer control (AM default)
- *                        3 = dual timer control; combined fast and slow timer control (FM default)
- *                 start : FM weak signal handling noise start
- *                        0 �� 800 [*0.1 %] = control when noise above 0�� 80% of USN detector
- *                        360 = 36% (default)
- *                 slope : FM weak signal handling noise range
- *                        100 �� 1000 [*0.1 %] = control over range of 10�� 100% of USN detector
- *                        300 = 30% (default)
- *END**************************************************************************/
-uint8_t Set_Highcut_Noise (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM) {
-        PSet_Highcut_Level  pSet_Highcut_Level ;
-        XDATA16             tmp ;
-
-        pSet_Highcut_Level = (PSet_Highcut_Level)buf ;
-        memset (buf, '\0', sizeof (SSet_Highcut_Level)) ;
-
-        pSet_Highcut_Level->module          = module ;
-        pSet_Highcut_Level->cmd             = TEF668x_cmd_Set_Highcut_Level ;
-        pSet_Highcut_Level->index           = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_Highcut_Level->mode_hi         = tmp.hibyte ;
-        pSet_Highcut_Level->mode_lo         = tmp.lobyte ;
-
-        tmp.udata16                         = start ;
-        pSet_Highcut_Level->start_hi        = tmp.hibyte ;
-        pSet_Highcut_Level->start_lo        = tmp.lobyte ;
-
-        tmp.udata16                         = slope ;
-        pSet_Highcut_Level->slope_hi        = tmp.hibyte ;
-        pSet_Highcut_Level->slope_lo        = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_Highcut_Level) ;
-    }   // if (module == TEF668x_Module_Radio_FM)
-
-    return (ret_val) ;
-}   // uint8_t Set_Highcut_Noise (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_Highcut_Mph
- * Description   : set the noise and multiple path sensitivity and enables slow
- *                 and fast timing (FM only)
- * Parameters    :
- *                 mode : timer selection
- *                        0 = off (only for evaluation)
- *                        1 = fast timer control
- *                        2 = slow timer control (AM default)
- *                        3 = dual timer control; combined fast and slow timer control (FM default)
- *                 start : FM weak signal handling multiple path start
- *                        0 �� 800 [*0.1 %] = control when mph above 0�� 80% of WAM detector
- *                        360 = 36% (default)
- *                 slope : FM weak signal handling multiple path range
- *                        100 �� 1000 [*0.1 %] = control over range of 10�� 100% of WAM detector
- *                        300 = 30% (default)
- *END**************************************************************************/
-uint8_t Set_Highcut_Mph (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM) {
-        PSet_Highcut_Mph    pSet_Highcut_Mph ;
-        XDATA16             tmp ;
-
-        pSet_Highcut_Mph = (PSet_Highcut_Mph)buf ;
-        memset (buf, '\0', sizeof (SSet_Highcut_Mph)) ;
-
-        pSet_Highcut_Mph->module            = TEF668x_Module_Radio_FM ;
-        pSet_Highcut_Mph->cmd               = TEF668x_cmd_Set_Highcut_Mph ;
-        pSet_Highcut_Mph->index             = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_Highcut_Mph->mode_hi           = tmp.hibyte ;
-        pSet_Highcut_Mph->mode_lo           = tmp.lobyte ;
-
-        tmp.udata16                         = start ;
-        pSet_Highcut_Mph->start_hi          = tmp.hibyte ;
-        pSet_Highcut_Mph->start_lo          = tmp.lobyte ;
-
-        tmp.udata16                         = slope ;
-        pSet_Highcut_Mph->slope_hi          = tmp.hibyte ;
-        pSet_Highcut_Mph->slope_lo          = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_Highcut_Mph) ;
-    }   // if (module == TEF668x_Module_Radio_FM)
-
-    return (ret_val) ;
-}   // uint8_t Set_Highcut_Mph (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_Highcut_Max
- * Description   : enables and defines the maximum amount of Highcut attenuation
- *                 (as realized for poor signal conditions)
- * Parameters    :
- *                 mode : weak signal handling (dynamic control)
- *                        0 = off; for evaluation only
- *                        1 = on; maximum dynamic control set by limit parameter (default)
- *                 limit : Highcut attenuation limit
- *                        FM    Highcut corner frequency for maximum -3 dB attenuation
- *                              4000 = 4 kHz (default)
- *                              1500 �� 7000 [*1 Hz] = 1.5 �� 7 kHz �IR�� filter (Options ��1�� (default))
- *                              700 �� 3000 [*1 Hz] = 0.7 �� 3 kHz �eemphasis�� mode (Options ��2��)
- *                              2700 �� 7000 [*1 Hz] = 2.7 �� 7 kHz �IR�� highcut filter (Options ��3��)
- *                        AM    1350 �� 7000 [*1 Hz] = 1.35 �� 7 kHz  Highcut maximum -3 dB att.
- *                              1800 = 1.8 kHz (default)
- *END**************************************************************************/
-uint8_t Set_Highcut_Max (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t limit) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM || module == TEF668x_Module_Radio_AM) {
-        PSet_Highcut_Max    pSet_Highcut_Max ;
-        XDATA16             tmp ;
-
-        pSet_Highcut_Max = (PSet_Highcut_Max)buf ;
-        memset (buf, '\0', sizeof (SSet_Highcut_Max)) ;
-
-        pSet_Highcut_Max->module            = module ;
-        pSet_Highcut_Max->cmd               = TEF668x_cmd_Set_Highcut_Max ;
-        pSet_Highcut_Max->index             = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_Highcut_Max->mode_hi           = tmp.hibyte ;
-        pSet_Highcut_Max->mode_lo           = tmp.lobyte ;
-
-        tmp.udata16                         = limit ;
-        pSet_Highcut_Max->limit_hi          = tmp.hibyte ;
-        pSet_Highcut_Max->limit_lo          = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_Highcut_Max) ;
-    }   // if (module == TEF668x_Module_Radio_FM || module == TEF668x_Module_Radio_AM)
-
-    return (ret_val) ;
-}   // uint8_t Set_Highcut_Max (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t limit)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_Highcut_Min
- * Description   : optionally defines a minimum amount of Highcut attenuation (as
- *                 realized for good signal conditions).
- * Parameters    :
- *                 mode : strong signal handling
- *                        0 = off; high audio frequency bandwidth is not limited (FM default)
- *                        1 = on; minimum control limit set by limit parameter (AM default)
- *                 limit : Highcut fixed attenuation limit
- *                        FM    Highcut corner frequency for minimum -3 dB attenuation
- *                              10000 = 10 kHz (default)
- *                              2700 �� 15000 [*1 Hz] = 2.7 �� 15 kHz �IR�� filter (Options ��1�� (default))
- *                              1500 �� 3183 [*1 Hz] = 1.5 �� 3.18 kHz �eemphasis�� (Options ��2��)
- *                              2122 = 75 us deemphasis / 3183 = 50 us deemphasis
- *                              2700 �� 15000 [*1 Hz] = 2.7 �� 15 kHz �IR�� highcut filter (Options ��3��)
- *                        AM    2700 �� 15000 [*1 Hz] = 2.7 �� 15 kHz  -3 dB att. for min. Highcut
- *                              6000 = 6 kHz (default)
- *END**************************************************************************/
-uint8_t Set_Highcut_Min (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t limit) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM || module == TEF668x_Module_Radio_AM) {
-        PSet_Highcut_Min    pSet_Highcut_Min ;
-        XDATA16             tmp ;
-
-        pSet_Highcut_Min = (PSet_Highcut_Min)buf ;
-        memset (buf, '\0', sizeof (SSet_Highcut_Min)) ;
-
-        pSet_Highcut_Min->module            = module ;
-        pSet_Highcut_Min->cmd               = TEF668x_cmd_Set_Highcut_Min ;
-        pSet_Highcut_Min->index             = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_Highcut_Min->mode_hi           = tmp.hibyte ;
-        pSet_Highcut_Min->mode_lo           = tmp.lobyte ;
-
-        tmp.udata16                         = limit ;
-        pSet_Highcut_Min->limit_hi          = tmp.hibyte ;
-        pSet_Highcut_Min->limit_lo          = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_Highcut_Min) ;
-    }   // if (module == TEF668x_Module_Radio_FM || module == TEF668x_Module_Radio_AM)
-
-    return (ret_val) ;
-}   // uint8_t Set_Highcut_Min (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t limit)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_Lowcut_Max
- * Description   : enables and defines the maximum dynamic Lowcut attenuation.
- * Parameters    :
- *                 mode : weak signal handling (dynamic control)
- *                        0 = off
- *                        1 =  on; maximum dynamic control defined by limit parameter (default)
- *                 limit : Lowcut dynamic attenuation limit
- *                        30 �� 500 [Hz] = 30 �� 500 Hz  -3 dB attenuation for maximum Lowcut
- *                        120 = 120 Hz (default)
- *END**************************************************************************/
-uint8_t Set_Lowcut_Max (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t limit) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM || module == TEF668x_Module_Radio_AM) {
-        PSet_Lowcut_Max     pSet_Lowcut_Max ;
-        XDATA16             tmp ;
-
-        pSet_Lowcut_Max = (PSet_Lowcut_Max)buf ;
-        memset (buf, '\0', sizeof (SSet_Lowcut_Max)) ;
-
-        pSet_Lowcut_Max->module            = module ;
-        pSet_Lowcut_Max->cmd               = TEF668x_cmd_Set_Lowcut_Max ;
-        pSet_Lowcut_Max->index             = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_Lowcut_Max->mode_hi            = tmp.hibyte ;
-        pSet_Lowcut_Max->mode_lo            = tmp.lobyte ;
-
-        tmp.udata16                         = limit ;
-        pSet_Lowcut_Max->limit_hi           = tmp.hibyte ;
-        pSet_Lowcut_Max->limit_lo           = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_Lowcut_Max) ;
-    }   // if (module == TEF668x_Module_Radio_FM || module == TEF668x_Module_Radio_AM)
-
-    return (ret_val) ;
-}   // uint8_t Set_Lowcut_Max (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t limit)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_Lowcut_Min
- * Description   : optionally defines a minimum attenuation for low signal frequencies.
- * Parameters    :
- *                 mode : strong signal handling
- *                        0 = off; low audio frequency bandwidth is not limited (FM default)
- *                        1 = on; minimum control limit set by limit parameter (AM default)
- *                 limit : Lowcut fixed attenuation limit
- *                        10 �� 200 [Hz] = 10 �� 200 Hz  Lowcut minimum -3 dB attenuation
- *                        20 = 20 Hz (default)
- *END**************************************************************************/
-uint8_t Set_Lowcut_Min (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t limit) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM || module == TEF668x_Module_Radio_AM) {
-        PSet_Lowcut_Min     pSet_Lowcut_Min ;
-        XDATA16             tmp ;
-
-        pSet_Lowcut_Min = (PSet_Lowcut_Min)buf ;
-        memset (buf, '\0', sizeof (SSet_Lowcut_Min)) ;
-
-        pSet_Lowcut_Min->module            = module ;
-        pSet_Lowcut_Min->cmd               = TEF668x_cmd_Set_Lowcut_Min ;
-        pSet_Lowcut_Min->index             = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_Lowcut_Min->mode_hi            = tmp.hibyte ;
-        pSet_Lowcut_Min->mode_lo            = tmp.lobyte ;
-
-        tmp.udata16                         = limit ;
-        pSet_Lowcut_Min->limit_hi           = tmp.hibyte ;
-        pSet_Lowcut_Min->limit_lo           = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_Lowcut_Min) ;
-    }   // if (module == TEF668x_Module_Radio_FM || module == TEF668x_Module_Radio_AM)
-
-    return (ret_val) ;
-}   // uint8_t Set_Lowcut_Min (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t limit)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_Highcut_Options
- * Description   : optionally defines a minimum attenuation for low signal frequencies.
- * Parameters    :
- *                 mode : FM Highcut control characteristics
- *                        1 = IIR; �nalog�� first order lowpass filter with controlled frequency (default)
- *                        2 = deemphasis; controlled frequency of the 50 / 75 us deemphasis filter
- *                        3 = FIR; �igital�� high order lowpass filter with controlled frequency
- *END**************************************************************************/
-uint8_t Set_Highcut_Options (uint8_t * buf, TEF668x_Module module, Highcut_Options_Mode mode) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM) {
-        PSet_Highcut_Options    pSet_Highcut_Options ;
-        XDATA16                 tmp ;
-
-        pSet_Highcut_Options = (PSet_Highcut_Options)buf ;
-        memset (buf, '\0', sizeof (SSet_Highcut_Options)) ;
-
-        pSet_Highcut_Options->module        = TEF668x_Module_Radio_FM ;
-        pSet_Highcut_Options->cmd           = TEF668x_cmd_Set_Highcut_Options ;
-        pSet_Highcut_Options->index         = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_Highcut_Options->mode_hi       = tmp.hibyte ;
-        pSet_Highcut_Options->mode_lo       = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_Highcut_Options) ;
-    }   // if (module == TEF668x_Module_Radio_FM)
-
-    return (ret_val) ;
-}   // uint8_t Set_Highcut_Options (uint8_t * buf, TEF668x_Module module, Highcut_Options_Mode mode)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_Stereo_Time
- * Description   :  defines the weak signal handling response times active for the level
- *                  detector and noise and multipath detectors.
- * Parameters    :
- *                 slow_attack : slow attack time of weak signal handling
- *                        60 �� 2000 (ms) = 60 ms �� 2 s slow attack time
- *                        1000 = 1 s (default)
- *                 slow_decay : slow decay time of weak signal handling
- *                        120 �� 12500 (ms) = 120 ms �� 12.5 s slow attack time
- *                        4000 = 4 s (default)
- *                 fast_attack : fast attack time of weak signal handling
- *                        10 �� 1200 (*0.1 ms) = 1 ms �� 120 ms fast attack time
- *                        80 = 8 ms
- *                 fast_decay : fast decay time of weak signal handling
- *                        20 �� 5000 ( *0.1 ms) = 2 ms �� 500 ms fast attack time
- *                        80 = 8 ms
- *END**************************************************************************/
-uint8_t Set_Stereo_Time (uint8_t * buf, TEF668x_Module module, uint16_t slow_attack, uint16_t slow_decay, uint16_t fast_attack, uint16_t fast_decay) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM) {
-        PSet_Stereo_Time    pSet_Stereo_Time ;
-        XDATA16             tmp ;
-
-        pSet_Stereo_Time = (PSet_Stereo_Time)buf ;
-        memset (buf, '\0', sizeof (SSet_Stereo_Time)) ;
-
-        pSet_Stereo_Time->module        = TEF668x_Module_Radio_FM ;
-        pSet_Stereo_Time->cmd           = TEF668x_cmd_Set_Stereo_Time ;
-        pSet_Stereo_Time->index         = 1 ;
-
-        tmp.udata16                         = slow_attack ;
-        pSet_Stereo_Time->slow_attack_hi    = tmp.hibyte ;
-        pSet_Stereo_Time->slow_attack_lo    = tmp.lobyte ;
-
-        tmp.udata16                         = slow_decay ;
-        pSet_Stereo_Time->slow_decay_hi     = tmp.hibyte ;
-        pSet_Stereo_Time->slow_decay_lo     = tmp.lobyte ;
-
-        tmp.udata16                         = fast_attack ;
-        pSet_Stereo_Time->fast_attack_hi    = tmp.hibyte ;
-        pSet_Stereo_Time->fast_attack_lo    = tmp.lobyte ;
-
-        tmp.udata16                         = fast_decay ;
-        pSet_Stereo_Time->fast_decay_hi     = tmp.hibyte ;
-        pSet_Stereo_Time->fast_decay_lo     = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_Stereo_Time) ;
-    }   // if (module == TEF668x_Module_Radio_FM)
-
-    return (ret_val) ;
-}   // uint8_t Set_Stereo_Time (uint8_t * buf, TEF668x_Module module, uint16_t slow_attack, uint16_t slow_decay, uint16_t fast_attack, uint16_t fast_decay)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_Stereo_Mod
- * Description   : enables modulation dependency and sets sensitivity.
- * Parameters    :
- *                 mode : modulation dependent weak signal handling
- *                        0 = off (default)
- *                        1 = on (independent modulation timer)
- *                 start : weak signal handling modulation start
- *                        100 �� 1000 [*0.1 %] = control when modulation falls below 10% �� 100%
- *                        210 = 21% (default)
- *                        ( note: for FM band 100% modulation equals 75 kHz deviation )
- *                 slope : weak signal handling modulation range
- *                        30 �� 1000 (*0.1 %) = control over modulation range of 3% �� 100%
- *                        90 = 9% (default)
- *                 shift : weak signal handling control shift
- *                        50 �� 1000 (*0.1 %) = maximum weak signal control shift of 5% �� 100%
- *                        500 = 50% (default)
- *                        (percentage of the linear control range from _Min limit to �ono��)
- *END**************************************************************************/
-uint8_t Set_Stereo_Mod (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t start, uint16_t slope, uint16_t shift) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM) {
-        PSet_Stereo_Mod     pSet_Stereo_Mod ;
-        XDATA16             tmp ;
-
-        pSet_Stereo_Mod = (PSet_Stereo_Mod)buf ;
-        memset (buf, '\0', sizeof (SSet_Stereo_Mod)) ;
-
-        pSet_Stereo_Mod->module             = TEF668x_Module_Radio_FM ;
-        pSet_Stereo_Mod->cmd                = TEF668x_cmd_Set_Stereo_Mod ;
-        pSet_Stereo_Mod->index              = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_Stereo_Mod->mode_hi            = tmp.hibyte ;
-        pSet_Stereo_Mod->mode_lo            = tmp.lobyte ;
-
-        tmp.udata16                         = start ;
-        pSet_Stereo_Mod->start_hi           = tmp.hibyte ;
-        pSet_Stereo_Mod->start_lo           = tmp.lobyte ;
-
-        tmp.udata16                         = slope ;
-        pSet_Stereo_Mod->slope_hi           = tmp.hibyte ;
-        pSet_Stereo_Mod->slope_lo           = tmp.lobyte ;
-
-        tmp.udata16                         = shift ;
-        pSet_Stereo_Mod->shift_hi           = tmp.hibyte ;
-        pSet_Stereo_Mod->shift_lo           = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_Stereo_Mod) ;
-    }   // if (module == TEF668x_Module_Radio_FM)
-
-    return (ret_val) ;
-}   // uint8_t Set_Stereo_Mod (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t start, uint16_t slope, uint16_t shift)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_Stereo_Level
- * Description   : sets the level sensitivity and enables slow and fast timing.
- * Parameters    :
- *                 mode : timer selection
- *                        0 = off (only for evaluation)
- *                        1 = fast timer control
- *                        2 = slow timer control
- *                        3 =  dual timer control; combined fast and slow timer control (default)
- *                 start : weak signal handling level start
- *                        300 �� 600 [*0.1 dBuV] = control when level below 30 dB�V �� 60 dBuV
- *                        460 = 46 dB�V (default)
- *                 slope : weak signal handling level range
- *                        60 �� 300 [*0.1 dB] = control over level range of 6 dB �� 30 dB
- *                        240 = 24 dB (default)
- *END**************************************************************************/
-uint8_t Set_Stereo_Level (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM) {
-        PSet_Stereo_Level   pSet_Stereo_Level ;
-        XDATA16             tmp ;
-
-        pSet_Stereo_Level = (PSet_Stereo_Level)buf ;
-        memset (buf, '\0', sizeof (SSet_Stereo_Level)) ;
-
-        pSet_Stereo_Level->module           = TEF668x_Module_Radio_FM ;
-        pSet_Stereo_Level->cmd              = TEF668x_cmd_Set_Stereo_Level ;
-        pSet_Stereo_Level->index            = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_Stereo_Level->mode_hi          = tmp.hibyte ;
-        pSet_Stereo_Level->mode_lo          = tmp.lobyte ;
-
-        tmp.udata16                         = start ;
-        pSet_Stereo_Level->start_hi         = tmp.hibyte ;
-        pSet_Stereo_Level->start_lo         = tmp.lobyte ;
-
-        tmp.udata16                         = slope ;
-        pSet_Stereo_Level->slope_hi         = tmp.hibyte ;
-        pSet_Stereo_Level->slope_lo         = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_Stereo_Level) ;
-    }   // if (module == TEF668x_Module_Radio_FM)
-
-    return (ret_val) ;
-}   // uint8_t Set_Stereo_Level (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_Stereo_Noise
- * Description   : set the noise and multiple path sensitivity and enables slow
- *                 and fast timing.
- * Parameters    :
- *                 mode : timer selection
- *                        0 = off (only for evaluation)
- *                        1 = fast timer control
- *                        2 = slow timer control
- *                        3 =  dual timer control; combined fast and slow timer control (default)
- *                 start : FM weak signal handling noise start
- *                        0 �� 800 [*0.1 %] = control when noise above 0�� 80% of USN detector
- *                        240 = 24% (default)
- *                 slope : FM weak signal handling noise range
- *                        100 �� 1000 [*0.1 %] = control over range of 10�� 100% of USN detector
- *                        200 = 20% (default)
- *END**************************************************************************/
-uint8_t Set_Stereo_Noise (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM) {
-        PSet_Stereo_Noise   pSet_Stereo_Noise ;
-        XDATA16             tmp ;
-
-        pSet_Stereo_Noise = (PSet_Stereo_Noise)buf ;
-        memset (buf, '\0', sizeof (SSet_Stereo_Noise)) ;
-
-        pSet_Stereo_Noise->module           = TEF668x_Module_Radio_FM ;
-        pSet_Stereo_Noise->cmd              = TEF668x_cmd_Set_Stereo_Noise ;
-        pSet_Stereo_Noise->index            = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_Stereo_Noise->mode_hi          = tmp.hibyte ;
-        pSet_Stereo_Noise->mode_lo          = tmp.lobyte ;
-
-        tmp.udata16                         = start ;
-        pSet_Stereo_Noise->start_hi         = tmp.hibyte ;
-        pSet_Stereo_Noise->start_lo         = tmp.lobyte ;
-
-        tmp.udata16                         = slope ;
-        pSet_Stereo_Noise->slope_hi         = tmp.hibyte ;
-        pSet_Stereo_Noise->slope_lo         = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_Stereo_Noise) ;
-    }   // if (module == TEF668x_Module_Radio_FM)
-
-    return (ret_val) ;
-}   // uint8_t Set_Stereo_Noise (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_Stereo_Mph
- * Description   : set the noise and multiple path sensitivity and enables slow
- *                 and fast timing.
- * Parameters    :
- *                 mode : timer selection
- *                        0 = off
- *                        1 = fast timer control
- *                        2 = slow timer control
- *                        3 = dual timer control; combined fast and slow timer control (default)
- *                 start : FM weak signal handling multiple path start
- *                        0 �� 800 [*0.1 %] = control when mph above 0�� 80% of WAM detector
- *                        240 = 24% (default)
- *                 slope : FM weak signal handling multiple path range
- *                        100 �� 1000 [*0.1 %] = control over range of 10�� 100% of WAM detector
- *                        200 = 20% (default)
- *END**************************************************************************/
-uint8_t Set_Stereo_Mph (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM) {
-        PSet_Stereo_Mph     pSet_Stereo_Mph ;
-        XDATA16             tmp ;
-
-        pSet_Stereo_Mph = (PSet_Stereo_Mph)buf ;
-        memset (buf, '\0', sizeof (SSet_Stereo_Mph)) ;
-
-        pSet_Stereo_Mph->module             = TEF668x_Module_Radio_FM ;
-        pSet_Stereo_Mph->cmd                = TEF668x_cmd_Set_Stereo_Mph ;
-        pSet_Stereo_Mph->index              = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_Stereo_Mph->mode_hi            = tmp.hibyte ;
-        pSet_Stereo_Mph->mode_lo            = tmp.lobyte ;
-
-        tmp.udata16                         = start ;
-        pSet_Stereo_Mph->start_hi           = tmp.hibyte ;
-        pSet_Stereo_Mph->start_lo           = tmp.lobyte ;
-
-        tmp.udata16                         = slope ;
-        pSet_Stereo_Mph->slope_hi           = tmp.hibyte ;
-        pSet_Stereo_Mph->slope_lo           = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_Stereo_Mph) ;
-    }   // if (module == TEF668x_Module_Radio_FM)
-
-    return (ret_val) ;
-}   // uint8_t Set_Stereo_Mph (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_Stereo_Max
- * Description   : allows disabling the dynamic stereo control for evaluation purposes.
- * Parameters    :
- *                 mode : weak signal handling (dynamic control)
- *                        0 = off (for evaluation only)
- *                        1 = on; maximum dynamic control is 0 dB channel sep, i.e. mono (default)
- *END**************************************************************************/
-uint8_t Set_Stereo_Max (uint8_t * buf, TEF668x_Module module, OP_MODE mode) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM) {
-        PSet_Stereo_Max     pSet_Stereo_Max ;
-        XDATA16             tmp ;
-
-        pSet_Stereo_Max = (PSet_Stereo_Max)buf ;
-        memset (buf, '\0', sizeof (SSet_Stereo_Max)) ;
-
-        pSet_Stereo_Max->module             = TEF668x_Module_Radio_FM ;
-        pSet_Stereo_Max->cmd                = TEF668x_cmd_Set_Stereo_Max ;
-        pSet_Stereo_Max->index              = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_Stereo_Max->mode_hi            = tmp.hibyte ;
-        pSet_Stereo_Max->mode_lo            = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_Stereo_Max) ;
-    }   // if (module == TEF668x_Module_Radio_FM)
-
-    return (ret_val) ;
-}   // uint8_t Set_Stereo_Max (uint8_t * buf, TEF668x_Module module, OP_MODE mode)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_Stereo_Min
- * Description   : optionally defines a minimum amount of Stereo attenuation (as
- *                 realized for good signal conditions).
- * Parameters    :
- *                 mode : strong signal handling
- *                        0 = off; channel separation is not limited (default)
- *                        1 = on; minimum control limit set by limit parameter
- *                        2 = forced mono
- *                 limit : Stereo fixed attenuation limit
- *                        60 ��  400 [0.1* dB] = 6 �� 40 dB  Stereo minimum channel separation
- *                        400 = 40 dB (default)
- *END**************************************************************************/
-uint8_t Set_Stereo_Min (uint8_t * buf, TEF668x_Module module, Stereo_Min_MODE mode, uint16_t limit) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM) {
-        PSet_Stereo_Min     pSet_Stereo_Min ;
-        XDATA16             tmp ;
-
-        pSet_Stereo_Min = (PSet_Stereo_Min)buf ;
-        memset (buf, '\0', sizeof (SSet_Stereo_Min)) ;
-
-        pSet_Stereo_Min->module             = TEF668x_Module_Radio_FM ;
-        pSet_Stereo_Min->cmd                = TEF668x_cmd_Set_Stereo_Min ;
-        pSet_Stereo_Min->index              = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_Stereo_Min->mode_hi            = tmp.hibyte ;
-        pSet_Stereo_Min->mode_lo            = tmp.lobyte ;
-
-        tmp.udata16                         = limit ;
-        pSet_Stereo_Min->limit_hi           = tmp.hibyte ;
-        pSet_Stereo_Min->limit_lo           = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_Stereo_Min) ;
-    }   // if (module == TEF668x_Module_Radio_FM)
-
-    return (ret_val) ;
-}   // uint8_t Set_Stereo_Min (uint8_t * buf, TEF668x_Module module, Stereo_Min_MODE mode, uint16_t limit)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_StHiBlend_Time
- * Description   : defines the weak signal handling response times active for the
- *                 level detector and noise and multiple path detectors. Fast and
- *                 slow response times are available for dual timer functionality,
- *                 with enable options at the level, noise and mph commands.
- * Parameters    :
- *                 slow_attack : slow attack time of weak signal handling
- *                        60 �� 2000 (ms) = 60 ms �� 2 s slow attack time
- *                        500 = 500 ms (default)
- *                 slow_decay : slow decay time of weak signal handling
- *                        120 �� 12500 (ms) = 120 ms �� 12.5 s slow attack time
- *                        2000 = 2 s (default)
- *                 fast_attack : fast attack time of weak signal handling
- *                        10 �� 1200 (*0.1 ms) = 1 ms �� 120 ms fast attack time
- *                        20 = 2 ms (default)
- *                 fast_decay : fast decay time of weak signal handling
- *                        20 �� 5000 ( *0.1 ms) = 2 ms �� 500 ms fast attack time
- *                        20 = 2 ms (default)
- *END**************************************************************************/
-uint8_t Set_StHiBlend_Time (uint8_t * buf, TEF668x_Module module,  uint16_t slow_attack, uint16_t slow_decay, uint16_t fast_attack, uint16_t fast_decay) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM) {
-        PSet_StHiBlend_Time pSet_StHiBlend_Time ;
-        XDATA16             tmp ;
-
-        pSet_StHiBlend_Time = (PSet_StHiBlend_Time)buf ;
-        memset (buf, '\0', sizeof (SSet_StHiBlend_Time)) ;
-
-        pSet_StHiBlend_Time->module             = TEF668x_Module_Radio_FM ;
-        pSet_StHiBlend_Time->cmd                = TEF668x_cmd_Set_StHiBlend_Time ;
-        pSet_StHiBlend_Time->index              = 1 ;
-
-        tmp.udata16                         = slow_attack ;
-        pSet_StHiBlend_Time->slow_attack_hi = tmp.hibyte ;
-        pSet_StHiBlend_Time->slow_attack_lo = tmp.lobyte ;
-
-        tmp.udata16                         = slow_decay ;
-        pSet_StHiBlend_Time->slow_decay_hi  = tmp.hibyte ;
-        pSet_StHiBlend_Time->slow_decay_lo  = tmp.lobyte ;
-
-        tmp.udata16                         = fast_attack ;
-        pSet_StHiBlend_Time->fast_attack_hi = tmp.hibyte ;
-        pSet_StHiBlend_Time->fast_attack_lo = tmp.lobyte ;
-
-        tmp.udata16                         = fast_decay ;
-        pSet_StHiBlend_Time->fast_decay_hi  = tmp.hibyte ;
-        pSet_StHiBlend_Time->fast_decay_lo  = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_StHiBlend_Time) ;
-    }   // if (module == TEF668x_Module_Radio_FM)
-
-    return (ret_val) ;
-}   // uint8_t Set_StHiBlend_Time (uint8_t * buf, TEF668x_Module module,  uint16_t slow_attack, uint16_t slow_decay, uint16_t fast_attack, uint16_t fast_decay)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_StHiBlend_Mod
- * Description   : enables modulation dependency and sets sensitivity.
- * Parameters    :
- *                 mode : modulation dependent weak signal handling
- *                        0 = off (default)
- *                        1 = on (independent modulation timer)
- *                 start : weak signal handling modulation start
- *                        100 �� 1000 [*0.1 %] = control when modulation falls below 10% �� 100%
- *                        240 = 24% (default)
- *                        ( note: for FM band 100% modulation equals 75 kHz deviation )
- *                 slope : weak signal handling modulation range
- *                        30 �� 1000 (*0.1 %) = control over modulation range of 3% �� 100%
- *                        120 = 12% (default)
- *                 shift : weak signal handling control shift
- *                        50 �� 1000 (*0.1 %) = maximum weak signal control shift of 5% �� 100%
- *                        670 = 67% (default)
- *                        (percentage of the control range from _Min limit to _Max limit)
- *END**************************************************************************/
-uint8_t Set_StHiBlend_Mod (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t start, uint16_t slope, uint16_t shift) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM) {
-        PSet_StHiBlend_Mod  pSet_StHiBlend_Mod ;
-        XDATA16             tmp ;
-
-        pSet_StHiBlend_Mod = (PSet_StHiBlend_Mod)buf ;
-        memset (buf, '\0', sizeof (SSet_StHiBlend_Mod)) ;
-
-        pSet_StHiBlend_Mod->module          = TEF668x_Module_Radio_FM ;
-        pSet_StHiBlend_Mod->cmd             = TEF668x_cmd_Set_StHiBlend_Mod ;
-        pSet_StHiBlend_Mod->index           = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_StHiBlend_Mod->mode_hi         = tmp.hibyte ;
-        pSet_StHiBlend_Mod->mode_lo         = tmp.lobyte ;
-
-        tmp.udata16                         = start ;
-        pSet_StHiBlend_Mod->start_hi        = tmp.hibyte ;
-        pSet_StHiBlend_Mod->start_lo        = tmp.lobyte ;
-
-        tmp.udata16                         = slope ;
-        pSet_StHiBlend_Mod->slope_hi        = tmp.hibyte ;
-        pSet_StHiBlend_Mod->slope_lo        = tmp.lobyte ;
-
-        tmp.udata16                         = shift ;
-        pSet_StHiBlend_Mod->shift_hi        = tmp.hibyte ;
-        pSet_StHiBlend_Mod->shift_lo        = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_StHiBlend_Mod) ;
-    }   // if (module == TEF668x_Module_Radio_FM)
-
-    return (ret_val) ;
-}   // uint8_t Set_StHiBlend_Mod (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t start, uint16_t slope, uint16_t shift)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_StHiBlend_Level
- * Description   : sets the level sensitivity and enables slow and fast timing.
- * Parameters    :
- *                 mode : timer selection
- *                        0 = off
- *                        1 = fast timer control
- *                        2 = slow timer control
- *                        3 = dual timer control; combined fast and slow timer control (default)
- *                 start : weak signal handling level start
- *                        300 �� 660 [*0.1 dBuV] = control when level below 30 dB�V �� 66 dBuV
- *                        600 = 60 dBuV (default)
- *                 slope : weak signal handling level range
- *                        60 �� 300 [*0.1 dB] = control over level range of 6 dB �� 30 dB
- *                        240 = 24 dB (default)
- *END**************************************************************************/
-uint8_t Set_StHiBlend_Level (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM) {
-        PSet_StHiBlend_Level    pSet_StHiBlend_Level ;
-        XDATA16                 tmp ;
-
-        pSet_StHiBlend_Level = (PSet_StHiBlend_Level)buf ;
-        memset (buf, '\0', sizeof (SSet_StHiBlend_Level)) ;
-
-        pSet_StHiBlend_Level->module        = TEF668x_Module_Radio_FM ;
-        pSet_StHiBlend_Level->cmd           = TEF668x_cmd_Set_StHiBlend_Level ;
-        pSet_StHiBlend_Level->index         = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_StHiBlend_Level->mode_hi       = tmp.hibyte ;
-        pSet_StHiBlend_Level->mode_lo       = tmp.lobyte ;
-
-        tmp.udata16                         = start ;
-        pSet_StHiBlend_Level->start_hi      = tmp.hibyte ;
-        pSet_StHiBlend_Level->start_lo      = tmp.lobyte ;
-
-        tmp.udata16                         = slope ;
-        pSet_StHiBlend_Level->slope_hi      = tmp.hibyte ;
-        pSet_StHiBlend_Level->slope_lo      = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_StHiBlend_Level) ;
-    }   // if (module == TEF668x_Module_Radio_FM)
-
-    return (ret_val) ;
-}   // uint8_t Set_StHiBlend_Level (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_StHiBlend_Noise
- * Description   : set the noise and multiple path sensitivity and enables slow
- *                 and fast timing.
- * Parameters    :
- *                 mode : timer selection
- *                        0 = off
- *                        1 = fast timer control
- *                        2 = slow timer control
- *                        3 = dual timer control; combined fast and slow timer control (default)
- *                 start : FM weak signal handling noise start
- *                        0 �� 800 [*0.1 %] = control when noise above 0�� 80% of USN detector
- *                        160 = 16% (default)
- *                 slope : FM weak signal handling noise range
- *                        100 �� 1000 [*0.1 %] = control over range of 10�� 100% of USN detector
- *                        140 = 14% (default)
- *END**************************************************************************/
-uint8_t Set_StHiBlend_Noise (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM) {
-        PSet_StHiBlend_Noise    pSet_StHiBlend_Noise ;
-        XDATA16                 tmp ;
-
-        pSet_StHiBlend_Noise = (PSet_StHiBlend_Noise)buf ;
-        memset (buf, '\0', sizeof (SSet_StHiBlend_Noise)) ;
-
-        pSet_StHiBlend_Noise->module        = TEF668x_Module_Radio_FM ;
-        pSet_StHiBlend_Noise->cmd           = TEF668x_cmd_Set_StHiBlend_Noise ;
-        pSet_StHiBlend_Noise->index         = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_StHiBlend_Noise->mode_hi       = tmp.hibyte ;
-        pSet_StHiBlend_Noise->mode_lo       = tmp.lobyte ;
-
-        tmp.udata16                         = start ;
-        pSet_StHiBlend_Noise->start_hi      = tmp.hibyte ;
-        pSet_StHiBlend_Noise->start_lo      = tmp.lobyte ;
-
-        tmp.udata16                         = slope ;
-        pSet_StHiBlend_Noise->slope_hi      = tmp.hibyte ;
-        pSet_StHiBlend_Noise->slope_lo      = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_StHiBlend_Noise) ;
-    }   // if (module == TEF668x_Module_Radio_FM)
-
-    return (ret_val) ;
-}   // uint8_t Set_StHiBlend_Noise (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_StHiBlend_Mph
- * Description   : set the noise and multiple path sensitivity and enables slow and
- *                 fast timing.
- * Parameters    :
- *                 mode : timer selection
- *                        0 = off
- *                        1 = fast timer control
- *                        2 = slow timer control
- *                        3 = dual timer control; combined fast and slow timer control (default)
- *                 start : FM weak signal handling multiple path start
- *                        0 �� 800 [*0.1 %] = control when mph above 0�� 80% of WAM detector
- *                        160 = 16% (default)
- *                 slope : FM weak signal handling multiple path range
- *                        100 �� 1000 [*0.1 %] = control over range of 10�� 100% of WAM detector
- *                        140 = 14% (default)
- *END**************************************************************************/
-uint8_t Set_StHiBlend_Mph (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM) {
-        PSet_StHiBlend_Mph  pSet_StHiBlend_Mph ;
-        XDATA16             tmp ;
-
-        pSet_StHiBlend_Mph = (PSet_StHiBlend_Mph)buf ;
-        memset (buf, '\0', sizeof (SSet_StHiBlend_Mph)) ;
-
-        pSet_StHiBlend_Mph->module          = TEF668x_Module_Radio_FM ;
-        pSet_StHiBlend_Mph->cmd             = TEF668x_cmd_Set_StHiBlend_Mph ;
-        pSet_StHiBlend_Mph->index           = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_StHiBlend_Mph->mode_hi         = tmp.hibyte ;
-        pSet_StHiBlend_Mph->mode_lo         = tmp.lobyte ;
-
-        tmp.udata16                         = start ;
-        pSet_StHiBlend_Mph->start_hi        = tmp.hibyte ;
-        pSet_StHiBlend_Mph->start_lo        = tmp.lobyte ;
-
-        tmp.udata16                         = slope ;
-        pSet_StHiBlend_Mph->slope_hi        = tmp.hibyte ;
-        pSet_StHiBlend_Mph->slope_lo        = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_StHiBlend_Mph) ;
-    }   // if (module == TEF668x_Module_Radio_FM)
-
-    return (ret_val) ;
-}   // uint8_t Set_StHiBlend_Mph (uint8_t * buf, TEF668x_Module module, Timer_Control_Mode mode, uint16_t start, uint16_t slope)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_StHiBlend_Max
- * Description   : enables and defines the maximum amount of StHiBlend attenuation
- *                 (as realized for very poor signal conditions).
- * Parameters    :
- *                 mode : weak signal handling (dynamic control)
- *                        0 = off
- *                        1 = on; maximum dynamic control defined by limit parameter (default)
- *                 limit : StHiBlend dynamic attenuation limit
- *                       2700 ��  7000 [Hz] = 2.7 kHz �� 7 kHz StHiBlend max.
- *                       reduction of channel separation bandwidth
- *                       4000 = 4 kHz (default)
- *END**************************************************************************/
-uint8_t Set_StHiBlend_Max (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t limit) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM) {
-        PSet_StHiBlend_Max  pSet_StHiBlend_Max ;
-        XDATA16             tmp ;
-
-        pSet_StHiBlend_Max = (PSet_StHiBlend_Max)buf ;
-        memset (buf, '\0', sizeof (SSet_StHiBlend_Max)) ;
-
-        pSet_StHiBlend_Max->module          = TEF668x_Module_Radio_FM ;
-        pSet_StHiBlend_Max->cmd             = TEF668x_cmd_Set_StHiBlend_Max ;
-        pSet_StHiBlend_Max->index           = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_StHiBlend_Max->mode_hi         = tmp.hibyte ;
-        pSet_StHiBlend_Max->mode_lo         = tmp.lobyte ;
-
-        tmp.udata16                         = limit ;
-        pSet_StHiBlend_Max->limit_hi        = tmp.hibyte ;
-        pSet_StHiBlend_Max->limit_lo        = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_StHiBlend_Max) ;
-    }   // if (module == TEF668x_Module_Radio_FM)
-
-    return (ret_val) ;
-}   // uint8_t Set_StHiBlend_Max (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t limit)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_StHiBlend_Min
- * Description   : optionally defines a minimum amount of StHiBlend attenuation
- *                 (as realized for good signal conditions).
- * Parameters    :
- *                 mode : strong signal handling
- *                        0 = off; channel separation bw is not limited (default)
- *                        1 = on; minimum control limit set by limit parameter
- *                 limit : StHiBlend fixed attenuation limit
- *                       3000 ��  15000 [Hz] = 3 kHz �� 15 kHz StHiBlend min.
- *                       reduction of channel separation bandwidth
- *                       7000 = 7 kHz (default)
- *END**************************************************************************/
-uint8_t Set_StHiBlend_Min (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t limit) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM) {
-        PSet_StHiBlend_Min  pSet_StHiBlend_Min ;
-        XDATA16             tmp ;
-
-        pSet_StHiBlend_Min = (PSet_StHiBlend_Min)buf ;
-        memset (buf, '\0', sizeof (SSet_StHiBlend_Min)) ;
-
-        pSet_StHiBlend_Min->module          = TEF668x_Module_Radio_FM ;
-        pSet_StHiBlend_Min->cmd             = TEF668x_cmd_Set_StHiBlend_Min ;
-        pSet_StHiBlend_Min->index           = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_StHiBlend_Min->mode_hi         = tmp.hibyte ;
-        pSet_StHiBlend_Min->mode_lo         = tmp.lobyte ;
-
-        tmp.udata16                         = limit ;
-        pSet_StHiBlend_Min->limit_hi        = tmp.hibyte ;
-        pSet_StHiBlend_Min->limit_lo        = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_StHiBlend_Min) ;
-    }   // if (module == TEF668x_Module_Radio_FM)
-
-    return (ret_val) ;
-}   // uint8_t Set_StHiBlend_Min (uint8_t * buf, TEF668x_Module module, OP_MODE mode, uint16_t limit)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_Scaler
- * Description   : Fine tuning of sound amplitude between FM and AM analog radio
- *                 sound.
- * Parameters    :
- *                 gain : channel gain
- *                        -120 �� +60 [*0.1 dB] = -12 �� +6 dB analog radio signal gain
- *                        0 = 0 dB (default)
- *END**************************************************************************/
-uint8_t Set_Scaler (uint8_t * buf, TEF668x_Module module, int16_t gain) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM || module == TEF668x_Module_Radio_AM) {
-        PSet_Scaler pSet_Scaler ;
-        XDATA16     tmp ;
-
-        pSet_Scaler = (PSet_Scaler)buf ;
-        memset (buf, '\0', sizeof (SSet_Scaler)) ;
-
-        pSet_Scaler->module                 = module ;
-        pSet_Scaler->cmd                    = TEF668x_cmd_Set_Scaler ;
-        pSet_Scaler->index                  = 1 ;
-
-        tmp.data16                          = gain ;
-        pSet_Scaler->gain_hi                = tmp.hibyte ;
-        pSet_Scaler->gain_lo                = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_Scaler) ;
-    }   // if (module == TEF668x_Module_Radio_FM)
-
-    return (ret_val) ;
-}   // uint8_t Set_Scaler (uint8_t * buf, TEF668x_Module module, int16_t gain)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_RDS
- * Description   : Fine tuning of sound amplitude between FM and AM analog radio
- *                 sound.
- * Parameters    :
- *                 mode : RDS operation control
- *                        0 = off (RDS function disabled)
- *                        1 = decoder mode (default); output of RDS group data (block A, B, C, D)
- *                            from Get_RDS_Status/Get_RDS_Data; FM cmd = 130/131
- *                        2 = demodulator mode; output of raw demodulator data from
- *                            Get_RDS_Status/Get_RDS_Data; FM cmd = 130/131
- *                 restart : RDS decoder restart
- *                        0 = no control
- *                        1 = manual restart; start looking for new RDS signal immediately
- *                        2 = automatic restart after tuning (default); start looking for new RDS signal
- *                            after Preset, Search, Jump or Check tuning action (see FM cmd = 1)
- *                 interface : RDS pin signal functionality
- *                        0 = no pin interface (default)
- *                        2 = data-available status output; active low  (GPIO feature �AVN��)
- *                        4 = legacy 2-wire demodulator data and clock output (�DDA�� and �DCL��)
- *END**************************************************************************/
-uint8_t Set_RDS (uint8_t * buf, TEF668x_Module module, RDS_Control_Mode mode, RDS_RESTART_Mode restart, RDS_PIN_SIGNAL_Type interface) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM || module == TEF668x_Module_Radio_AM) {
-        PSet_RDS    pSet_RDS ;
-        XDATA16     tmp ;
-
-        pSet_RDS = (PSet_RDS)buf ;
-        memset (buf, '\0', sizeof (SSet_RDS)) ;
-
-        pSet_RDS->module                    = module ;
-        pSet_RDS->cmd                       = TEF668x_cmd_Set_RDS ;
-        pSet_RDS->index                     = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_RDS->mode_hi                   = tmp.hibyte ;
-        pSet_RDS->mode_lo                   = tmp.lobyte ;
-
-        tmp.udata16                         = restart ;
-        pSet_RDS->restart_hi                = tmp.hibyte ;
-        pSet_RDS->restart_lo                = tmp.lobyte ;
-
-        tmp.udata16                         = interface ;
-        pSet_RDS->interface_hi              = tmp.hibyte ;
-        pSet_RDS->interface_lo              = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_RDS) ;
-    }   // if (module == TEF668x_Module_Radio_FM)
-
-    return (ret_val) ;
-}   // uint8_t Set_RDS (uint8_t * buf, TEF668x_Module module, RDS_Control_Mode mode, RDS_RESTART_Mode restart, RDS_PIN_SIGNAL_Type interface)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_QualityStatus
- * Description   : Enable and define interrupt use or status pin output for
- *                 quality detector status flag.
- * Parameters    :
- *                 mode : quality status flag after tuning ready
- *                        0 = no flag set after tuning (default)
- *                        [ 8:0 ] : 10 �� 320 (* 0.1 ms) = set flag at 1 �� 32 ms after tuning ready
- *                        [15] :    1 = set flag when FM AF_Update quality result is available
- *                 interface : quality status pin signal functionality
- *                        0 = no pin interface (default)
- *                        2 = quality status output; active low  (�SI��)
- *END**************************************************************************/
-uint8_t Set_QualityStatus (uint8_t * buf, TEF668x_Module module, uint16_t mode, QualityStatus_PIN_SIGNAL_Type interface) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM || module == TEF668x_Module_Radio_AM) {
-        PSet_QualityStatus  pSet_QualityStatus ;
-        XDATA16             tmp ;
-
-        pSet_QualityStatus = (PSet_QualityStatus)buf ;
-        memset (buf, '\0', sizeof (SSet_QualityStatus)) ;
-
-        pSet_QualityStatus->module          = module ;
-        pSet_QualityStatus->cmd             = TEF668x_cmd_Set_QualityStatus ;
-        pSet_QualityStatus->index           = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_QualityStatus->mode_hi         = tmp.hibyte ;
-        pSet_QualityStatus->mode_lo         = tmp.lobyte ;
-
-        tmp.udata16                         = interface ;
-        pSet_QualityStatus->interface_hi    = tmp.hibyte ;
-        pSet_QualityStatus->interface_lo    = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_QualityStatus) ;
-    }   // if (module == TEF668x_Module_Radio_FM || module == TEF668x_Module_Radio_AM)
-
-    return (ret_val) ;
-}   // uint8_t Set_QualityStatus (uint8_t * buf, TEF668x_Module module, uint16_t mode, QualityStatus_PIN_SIGNAL_Type interface)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_DR_Blend
- * Description   : Available for TEF6688 and TEF6689 only.
- *                 Control of digital radio blend functionality and digital radio
- *                 scaler.
- * Parameters    :
- *                 mode : blend pin use (DR_BL input)
- *                        0 = Standard pin use : DR Blend pin High = digital radio (default)
- *                        1 = Inverted pin use : DR Blend pin Low = digital radio
- *                        2 = No pin use; Force blend to digital radio
- *                        3 = No pin use; Force blend to analog radio
- *                 in_time : blend time from analog radio to digital radio
- *                        10 �� 5000 [*0.1 ms] = 1 �� 500 ms
- *                        50 = 5 ms (default)
- *                 out_time : blend time from digital radio to analog radio
- *                        10 �� 5000 [*0.1 ms] = 1 �� 500 ms
- *                        50 = 5 ms (default)
- *                 gain : digital radio channel gain
- *                        -180 �� +60 [*0.1 dB] = -18 �� +6 dB  digital radio signal gain
- *                        0 = 0 dB (default)
- *END**************************************************************************/
-uint8_t Set_DR_Blend (uint8_t * buf, TEF668x_Module module, uint16_t mode, uint16_t in_time, uint16_t out_time, int16_t gain) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM || module == TEF668x_Module_Radio_AM) {
-        PSet_DR_Blend   pSet_DR_Blend ;
-        XDATA16         tmp ;
-
-        pSet_DR_Blend = (PSet_DR_Blend)buf ;
-        memset (buf, '\0', sizeof (SSet_DR_Blend)) ;
-
-        pSet_DR_Blend->module               = module ;
-        pSet_DR_Blend->cmd                  = TEF668x_cmd_Set_DR_Blend ;
-        pSet_DR_Blend->index                = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_DR_Blend->mode_hi              = tmp.hibyte ;
-        pSet_DR_Blend->mode_lo              = tmp.lobyte ;
-
-        tmp.udata16                         = in_time ;
-        pSet_DR_Blend->in_time_hi           = tmp.hibyte ;
-        pSet_DR_Blend->in_time_lo           = tmp.lobyte ;
-
-        tmp.udata16                         = out_time ;
-        pSet_DR_Blend->out_time_hi          = tmp.hibyte ;
-        pSet_DR_Blend->out_time_lo          = tmp.lobyte ;
-
-        tmp.data16                          = gain ;
-        pSet_DR_Blend->gain_hi              = tmp.hibyte ;
-        pSet_DR_Blend->gain_lo              = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_DR_Blend) ;
-    }   // if (module == TEF668x_Module_Radio_FM || module == TEF668x_Module_Radio_AM)
-
-    return (ret_val) ;
-}   // uint8_t Set_DR_Blend (uint8_t * buf, TEF668x_Module module, uint16_t mode, uint16_t in_time, uint16_t out_time, int16_t gain)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_DR_Options
- * Description   : For TEF6688 and TEF6689 only.
- *                 Control of digital radio I/O functionality. Note: DR output is
- *                 functional only when digital radio is enabled
- *                 (see 3.13 FM / AM cmd 30   Set_DigitalRadio).
- * Parameters    :
- *                 samplerate : baseband digital radio sample rate (DR_I2S output)
- *                        0 = automatic frequency selection based on tuning frequency (default)
- *                        6500 = 650 kHz (not for normal application use)
- *                        6750 = 675 kHz (not for normal application use)
- *                 mode : baseband digital radio pin mode
- *                        [ 15:8 ] =   BCK and WS pin mode
- *                          34 = standard operation, voltage output (default)
- *                        [ 7:0 ] =  Data pin(s) mode
- *                          2 = voltage output
- *                          4 = open drain (�ull down��) (default)
- *                 format : baseband digital radio format select
- *                        16 = I2S 16 bit, ��3 wire�� interface with single I/Q signal line (DR_I_DATA)
- *                        (f DR_BCK  = 32 * sample rate)
- *                        4112 = I2S 16 bit, ��4 wire�� interface with independent I and Q signal lines
- *                        (f DR_BCK  = 16 * sample rate) (default)
- *END**************************************************************************/
-uint8_t Set_DR_Options (uint8_t * buf, TEF668x_Module module, uint16_t samplerate, uint16_t mode, uint16_t format) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM || module == TEF668x_Module_Radio_AM) {
-        PSet_DR_Options pSet_DR_Options ;
-        XDATA16         tmp ;
-
-        pSet_DR_Options = (PSet_DR_Options)buf ;
-        memset (buf, '\0', sizeof (SSet_DR_Options)) ;
-
-        pSet_DR_Options->module             = module ;
-        pSet_DR_Options->cmd                = TEF668x_cmd_Set_DR_Options ;
-        pSet_DR_Options->index              = 1 ;
-
-        tmp.udata16                         = samplerate ;
-        pSet_DR_Options->samplerate_hi      = tmp.hibyte ;
-        pSet_DR_Options->samplerate_lo      = tmp.lobyte ;
-
-        tmp.udata16                         = mode ;
-        pSet_DR_Options->mode_hi            = tmp.hibyte ;
-        pSet_DR_Options->mode_lo            = tmp.lobyte ;
-
-        tmp.udata16                         = format ;
-        pSet_DR_Options->format_hi          = tmp.hibyte ;
-        pSet_DR_Options->format_lo          = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_DR_Options) ;
-    }   // if (module == TEF668x_Module_Radio_FM || module == TEF668x_Module_Radio_AM)
-
-    return (ret_val) ;
-}   // uint8_t Set_DR_Options (uint8_t * buf, TEF668x_Module module, uint16_t samplerate, uint16_t mode, uint16_t format)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_Specials
- * Description   : Special radio options for evaluation and extended application use.
- * Parameters    :
- *                 ana_out : audio output use
- *                        0 = normal operation (default)
- *                        1 = DAC_L : FM MPX wideband (DARC) signal / DAC_R : FM mono audio
- *                        2 = L : digital radio left channel / R : analog radio left channel
- *END**************************************************************************/
-uint8_t Set_Specials (uint8_t * buf, TEF668x_Module module, uint16_t ana_out) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM || module == TEF668x_Module_Radio_AM) {
-        PSet_Specials   pSet_Specials ;
-        XDATA16         tmp ;
-
-        pSet_Specials = (PSet_Specials)buf ;
-        memset (buf, '\0', sizeof (SSet_Specials)) ;
-
-        pSet_Specials->module               = module ;
-        pSet_Specials->cmd                  = TEF668x_cmd_Set_Specials ;
-        pSet_Specials->index                = 1 ;
-
-        tmp.udata16                         = ana_out ;
-        pSet_Specials->ana_out_hi           = tmp.hibyte ;
-        pSet_Specials->ana_out_lo           = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_Specials) ;
-    }   // if (module == TEF668x_Module_Radio_FM || module == TEF668x_Module_Radio_AM)
-
-    return (ret_val) ;
-}   // uint8_t Set_Specials (uint8_t * buf, TEF668x_Module module, uint16_t ana_out)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_Bandwidth_Options
- * Description   : Additional control option of the FM automatic bandwidth radio selectivity filter.
- * Parameters    :
- *                 modulation : extended API: FM automatic bandwidth boost on modulation
- *                        660 �� 1330 (*0.1 %) = 66 �� 133 % modulation (= 50 �� 100 kHz FM dev.)
- *                        Modulation index where bandwidth is boosted to maximum bandwidth.
- *                        950 = 95 % (default)
- *END**************************************************************************/
-uint8_t Set_Bandwidth_Options (uint8_t * buf, TEF668x_Module module, uint16_t modulation) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM || module == TEF668x_Module_Radio_AM) {
-        PSet_Bandwidth_Options  pSet_Bandwidth_Options ;
-        XDATA16                 tmp ;
-
-        pSet_Bandwidth_Options = (PSet_Bandwidth_Options)buf ;
-        memset (buf, '\0', sizeof (SSet_Bandwidth_Options)) ;
-
-        pSet_Bandwidth_Options->module      = module ;
-        pSet_Bandwidth_Options->cmd         = TEF668x_cmd_Set_Bandwidth_Options ;
-        pSet_Bandwidth_Options->index       = 1 ;
-
-        tmp.udata16                         = modulation ;
-        pSet_Bandwidth_Options->modulation_hi   = tmp.hibyte ;
-        pSet_Bandwidth_Options->modulation_lo   = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_Bandwidth_Options) ;
-    }   // if (module == TEF668x_Module_Radio_FM || module == TEF668x_Module_Radio_AM)
-
-    return (ret_val) ;
-}   // uint8_t Set_Bandwidth_Options (uint8_t * buf, TEF668x_Module module, uint16_t modulation)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_StBandBlend_Time
- * Description   : defines the weak signal handling response times.
- * Parameters    :
- *                 attack : attack time of FMSI weak signal handling
- *                        10 �� 1000 (ms) = 10 ms �� 1 s attack time (control time towards mono)
- *                        50 = 50 ms (default)
- *                 decay : decay time of FMSI weak signal handling
- *                        10 �� 1000 (ms) = 10 ms �� 1 s attack time (control time towards stereo)
- *                        50 = 50 ms (default)
- *END**************************************************************************/
-uint8_t Set_StBandBlend_Time (uint8_t * buf, TEF668x_Module module, uint16_t attack, uint16_t decay) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM) {
-        PSet_StBandBlend_Time   pSet_StBandBlend_Time ;
-        XDATA16                 tmp ;
-
-        pSet_StBandBlend_Time = (PSet_StBandBlend_Time)buf ;
-        memset (buf, '\0', sizeof (SSet_StBandBlend_Time)) ;
-
-        pSet_StBandBlend_Time->module      = TEF668x_Module_Radio_FM ;
-        pSet_StBandBlend_Time->cmd         = TEF668x_cmd_Set_StBandBlend_Time ;
-        pSet_StBandBlend_Time->index       = 1 ;
-
-        tmp.udata16                         = attack ;
-        pSet_StBandBlend_Time->attack_hi    = tmp.hibyte ;
-        pSet_StBandBlend_Time->attack_lo    = tmp.lobyte ;
-
-        tmp.udata16                         = decay ;
-        pSet_StBandBlend_Time->decay_hi     = tmp.hibyte ;
-        pSet_StBandBlend_Time->decay_lo     = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_StBandBlend_Time) ;
-    }   // if (module == TEF668x_Module_Radio_FM)
-
-    return (ret_val) ;
-}   // uint8_t Set_StBandBlend_Time (uint8_t * buf, TEF668x_Module module, uint16_t attack, uint16_t decay)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_StBandBlend_Gain
- * Description   : defines the weak signal handling sensitivity for the four
- *                 available audio bands.
- * Parameters    :
- *                 band1 : control sensitivity for low frequency audio band
- *                        500 �� 1500 [*0.1 %] = 50% �� 150%  weak �� strong control to mono
- *                        1000 = 100% (default)
- *                 band2 : control sensitivity for audio band around 2 kHz
- *                        500 �� 1500 [*0.1 %] = 50% �� 150%  weak �� strong control to mono
- *                        1000 = 100% (default)
- *                 band3 : control sensitivity for audio band around 5 kHz
- *                        500 �� 1500 [*0.1 %] = 50% �� 150%  weak �� strong control to mono
- *                        1000 = 100% (default)
- *                 band4 : control sensitivity for high frequency audio band
- *                        500 �� 1500 [*0.1 %] = 50% �� 150%  weak �� strong control to mono
- *                        1000 = 100% (default)
- *END**************************************************************************/
-uint8_t Set_StBandBlend_Gain (uint8_t * buf, TEF668x_Module module, uint16_t band1, uint16_t band2, uint16_t band3, uint16_t band4) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM) {
-        PSet_StBandBlend_Gain   pSet_StBandBlend_Gain ;
-        XDATA16                 tmp ;
-
-        pSet_StBandBlend_Gain = (PSet_StBandBlend_Gain)buf ;
-        memset (buf, '\0', sizeof (SSet_StBandBlend_Gain)) ;
-
-        pSet_StBandBlend_Gain->module      = TEF668x_Module_Radio_FM ;
-        pSet_StBandBlend_Gain->cmd         = TEF668x_cmd_Set_StBandBlend_Gain ;
-        pSet_StBandBlend_Gain->index       = 1 ;
-
-        tmp.udata16                         = band1 ;
-        pSet_StBandBlend_Gain->band1_hi     = tmp.hibyte ;
-        pSet_StBandBlend_Gain->band1_lo     = tmp.lobyte ;
-
-        tmp.udata16                         = band2 ;
-        pSet_StBandBlend_Gain->band2_hi     = tmp.hibyte ;
-        pSet_StBandBlend_Gain->band2_lo     = tmp.lobyte ;
-
-        tmp.udata16                         = band3 ;
-        pSet_StBandBlend_Gain->band3_hi     = tmp.hibyte ;
-        pSet_StBandBlend_Gain->band3_lo     = tmp.lobyte ;
-
-        tmp.udata16                         = band4 ;
-        pSet_StBandBlend_Gain->band4_hi     = tmp.hibyte ;
-        pSet_StBandBlend_Gain->band4_lo     = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_StBandBlend_Gain) ;
-    }   // if (module == TEF668x_Module_Radio_FM)
-
-    return (ret_val) ;
-}   // uint8_t Set_StBandBlend_Gain (uint8_t * buf, TEF668x_Module module, uint16_t band1, uint16_t band2, uint16_t band3, uint16_t band4)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_StBandBlend_Bias
- * Description   : defines the system operation on the condition of good quality
- *                 reception with low modulation.
- * Parameters    :
- *                 band1 : control bias for low frequency audio band
- *                        -250 �� +250 [*0.1 %] = -25% �� +25%  stereo �� mono bias
- *                        -75 = -7.5% (default)
- *                 band2 : control bias for audio band around 2 kHz
- *                        -250 �� +250 [*0.1 %] = -25% �� +25%  stereo �� mono bias
- *                        -35 = -3.5% (default)
- *                 band3 : control bias for audio band around 5 kHz
- *                        -250 �� +250 [*0.1 %] = -25% �� +25%  stereo �� mono bias
- *                        -25 = -2.5% (default)
- *                 band4 : control bias for high frequency audio band
- *                        -250 �� +250 [*0.1 %] = -25% �� +25%  stereo �� mono bias
- *                        -25 = -2.5% (default)
- *END**************************************************************************/
-uint8_t Set_StBandBlend_Bias (uint8_t * buf, TEF668x_Module module, int16_t band1, int16_t band2, int16_t band3, int16_t band4) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Radio_FM) {
-        PSet_StBandBlend_Bias   pSet_StBandBlend_Bias ;
-        XDATA16                 tmp ;
-
-        pSet_StBandBlend_Bias = (PSet_StBandBlend_Bias)buf ;
-        memset (buf, '\0', sizeof (SSet_StBandBlend_Bias)) ;
-
-        pSet_StBandBlend_Bias->module       = TEF668x_Module_Radio_FM ;
-        pSet_StBandBlend_Bias->cmd          = TEF668x_cmd_Set_StBandBlend_Bias ;
-        pSet_StBandBlend_Bias->index        = 1 ;
-
-        tmp.data16                          = band1 ;
-        pSet_StBandBlend_Bias->band1_hi     = tmp.hibyte ;
-        pSet_StBandBlend_Bias->band1_lo     = tmp.lobyte ;
-
-        tmp.data16                          = band2 ;
-        pSet_StBandBlend_Bias->band2_hi     = tmp.hibyte ;
-        pSet_StBandBlend_Bias->band2_lo     = tmp.lobyte ;
-
-        tmp.data16                          = band3 ;
-        pSet_StBandBlend_Bias->band3_hi     = tmp.hibyte ;
-        pSet_StBandBlend_Bias->band3_lo     = tmp.lobyte ;
-
-        tmp.data16                          = band4 ;
-        pSet_StBandBlend_Bias->band4_hi     = tmp.hibyte ;
-        pSet_StBandBlend_Bias->band4_lo     = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_StBandBlend_Bias) ;
-    }   // if (module == TEF668x_Module_Radio_FM)
-
-    return (ret_val) ;
-}   // uint8_t Set_StBandBlend_Bias (uint8_t * buf, TEF668x_Module module, int16_t band1, int16_t band2, int16_t band3, int16_t band4)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_Volume
- * Description   : Setting of audio volume.
- * Parameters    :
- *                 volume : audio volume
- *                        -599 �� +240 = -60 �� +24 dB volume
- *                        0 = 0 dB (default)
- *END**************************************************************************/
-uint8_t Set_Volume (uint8_t * buf, TEF668x_Module module, int16_t volume) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Audio) {
-        PSet_Volume     pSet_Volume ;
-        XDATA16         tmp ;
-
-        pSet_Volume = (PSet_Volume)buf ;
-        memset (buf, '\0', sizeof (SSet_Volume)) ;
-
-        pSet_Volume->module                 = TEF668x_Module_Audio ;
-        pSet_Volume->cmd                    = TEF668x_cmd_Set_Volume ;
-        pSet_Volume->index                  = 1 ;
-
-        tmp.data16                          = volume ;
-        pSet_Volume->volume_hi              = tmp.hibyte ;
-        pSet_Volume->volume_lo              = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_Volume) ;
-    }   // if (module == TEF668x_Module_Audio)
-
-    return (ret_val) ;
-}   // uint8_t Set_Volume (uint8_t * buf, TEF668x_Module module, int16_t volume)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_Input
- * Description   : Enable and disable of the audio mute.
- * Parameters    :
- *                 source : audio source select
- *                        0 = radio (default)
- *                            (analog radio or digital radio when enabled and available)
- *                        32 = I2S digital audio input IIS_SD_0
- *                        240 = sine wave generator
- *END**************************************************************************/
-uint8_t Set_Input (uint8_t * buf, TEF668x_Module module, uint16_t source) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Audio) {
-        PSet_Input  pSet_Input ;
-        XDATA16     tmp ;
-
-        pSet_Input = (PSet_Input)buf ;
-        memset (buf, '\0', sizeof (SSet_Input)) ;
-
-        pSet_Input->module                  = TEF668x_Module_Audio ;
-        pSet_Input->cmd                     = TEF668x_cmd_Set_Input ;
-        pSet_Input->index                   = 1 ;
-
-        tmp.udata16                         = source ;
-        pSet_Input->source_hi               = tmp.hibyte ;
-        pSet_Input->source_lo               = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_Input) ;
-    }   // if (module == TEF668x_Module_Audio)
-
-    return (ret_val) ;
-}   // uint8_t Set_Input (uint8_t * buf, TEF668x_Module module, uint16_t source)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_Output_Source
- * Description   : Output select; selection of source signal for audio output.
- * Parameters    :
- *                 signal : audio output
- *                        33 = I2S digital audio output IIS_SD_1
- *                        128  = DAC L/R output
- *                 source : source
- *                        4 = analog radio
- *                        32 = I2S digital audio input IIS_SD_0
- *                        224 = audio processor (default)
- *                        240 = sine wave generator
- *END**************************************************************************/
-uint8_t Set_Output_Source (uint8_t * buf, TEF668x_Module module, uint16_t signal, uint16_t source) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Audio) {
-        PSet_Output_Source  pSet_Output_Source ;
-        XDATA16             tmp ;
-
-        pSet_Output_Source = (PSet_Output_Source)buf ;
-        memset (buf, '\0', sizeof (SSet_Output_Source)) ;
-
-        pSet_Output_Source->module          = TEF668x_Module_Audio ;
-        pSet_Output_Source->cmd             = TEF668x_cmd_Set_Output_Source ;
-        pSet_Output_Source->index           = 1 ;
-
-        tmp.udata16                         = signal ;
-        pSet_Output_Source->signal_hi       = tmp.hibyte ;
-        pSet_Output_Source->signal_lo       = tmp.lobyte ;
-
-        tmp.udata16                         = source ;
-        pSet_Output_Source->source_hi       = tmp.hibyte ;
-        pSet_Output_Source->source_lo       = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_Output_Source) ;
-    }   // if (module == TEF668x_Module_Audio)
-
-    return (ret_val) ;
-}   // uint8_t Set_Output_Source (uint8_t * buf, TEF668x_Module module, uint16_t signal, uint16_t source)
-
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_Ana_Out
- * Description   : Definition of analog output signals.
- * Parameters    :
- *                 signal : analog audio output
- *                        128 = DAC L/R output
- *                 mode : output mode
- *                        0 = off (power down)
- *                        1 = output enabled (default)
- *END**************************************************************************/
-uint8_t Set_Ana_Out (uint8_t * buf, TEF668x_Module module, uint16_t signal, uint16_t mode) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Audio) {
-        PSet_Ana_Out    pSet_Ana_Out ;
-        XDATA16         tmp ;
-
-        pSet_Ana_Out = (PSet_Ana_Out)buf ;
-        memset (buf, '\0', sizeof (SSet_Ana_Out)) ;
-
-        pSet_Ana_Out->module                = TEF668x_Module_Audio ;
-        pSet_Ana_Out->cmd                   = TEF668x_cmd_Set_Ana_Out ;
-        pSet_Ana_Out->index                 = 1 ;
-
-        tmp.udata16                         = signal ;
-        pSet_Ana_Out->signal_hi             = tmp.hibyte ;
-        pSet_Ana_Out->signal_lo             = tmp.lobyte ;
-
-        tmp.udata16                         = mode ;
-        pSet_Ana_Out->mode_hi               = tmp.hibyte ;
-        pSet_Ana_Out->mode_lo               = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_Ana_Out) ;
-    }   // if (module == TEF668x_Module_Audio)
-
-    return (ret_val) ;
-}   // uint8_t Set_Ana_Out (uint8_t * buf, TEF668x_Module module, uint16_t signal, uint16_t mode)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_Dig_IO
- * Description   : Definition of digital input and output audio signals.
- * Parameters    :
- *                 signal : digital audio input / output
- *                        32 = I簡S digital audio IIS_SD_0 (input)
- *                        33 = I簡S digital audio IIS_SD_1 (output)
- *                 mode : I/O mode
- *                        0 = off (default)
- *                        1 = input (only available for signal = 32)
- *                        2 = output (only available for signal = 33)
- *                 format : digital audio format select
- *                        16 = I簡S 16 bits (f IIS_BCK  = 32 * samplerate)
- *                        32 = I簡S 32 bits (f IIS_BCK  = 64 * samplerate) (default)
- *                        272 = lsb aligned 16 bit (f IIS_BCK  = 64 * samplerate)
- *                        274 = lsb aligned 18 bit (f IIS_BCK  = 64 * samplerate)
- *                        276 = lsb aligned 20 bit (f IIS_BCK  = 64 * samplerate)
- *                        280 = lsb aligned 24 bit (f IIS_BCK  = 64 * samplerate)
- *                 operation : operation mode
- *                        0 = slave mode; IIS_BCK and IIS_WS input defined by source (default)
- *                        256 = master mode; IIS_BCK and IIS_WS output defined by device
- *                 samplerate : audio sample rate select
- *                        3200 = 32.0 kHz
- *                        4410 = 44.1 kHz (default)
- *                        4800 = 48.0 kHz
- *END**************************************************************************/
-uint8_t Set_Dig_IO (uint8_t * buf, TEF668x_Module module, uint16_t signal, uint16_t mode, uint16_t format, uint16_t operation, uint16_t samplerate) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Audio) {
-        PSet_Dig_IO     pSet_Dig_IO ;
-        XDATA16         tmp ;
-
-        pSet_Dig_IO = (PSet_Dig_IO)buf ;
-        memset (buf, '\0', sizeof (SSet_Dig_IO)) ;
-
-        pSet_Dig_IO->module                 = TEF668x_Module_Audio ;
-        pSet_Dig_IO->cmd                    = TEF668x_cmd_Set_Dig_IO ;
-        pSet_Dig_IO->index                  = 1 ;
-
-        tmp.udata16                         = signal ;
-        pSet_Dig_IO->signal_hi              = tmp.hibyte ;
-        pSet_Dig_IO->signal_lo              = tmp.lobyte ;
-
-        tmp.udata16                         = mode ;
-        pSet_Dig_IO->mode_hi                = tmp.hibyte ;
-        pSet_Dig_IO->mode_lo                = tmp.lobyte ;
-
-        tmp.udata16                         = format ;
-        pSet_Dig_IO->format_hi              = tmp.hibyte ;
-        pSet_Dig_IO->format_lo              = tmp.lobyte ;
-
-        tmp.udata16                         = operation ;
-        pSet_Dig_IO->operation_hi           = tmp.hibyte ;
-        pSet_Dig_IO->operation_lo           = tmp.lobyte ;
-
-        tmp.udata16                         = samplerate ;
-        pSet_Dig_IO->samplerate_hi          = tmp.hibyte ;
-        pSet_Dig_IO->samplerate_lo          = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_Dig_IO) ;
-    }   // if (module == TEF668x_Module_Audio)
-
-    return (ret_val) ;
-}   // uint8_t Set_Dig_IO (uint8_t * buf, TEF668x_Module module, uint16_t signal, uint16_t mode, uint16_t format, uint16_t operation, uint16_t samplerate)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_Input_Scaler
- * Description   : Fine tuning of sound amplitude of external sources. For each
- *                 of the available external sources a separate sound amplitude
- *                 correction can be programmed for use when the audio input is
- *                 selected (see 3.32 AUDIO cmd 12 Set_Input).
- * Parameters    :
- *                 source : audio source
- *                        32 = I簡S digital audio input : IIS_SD_0
- *                 gain : external source channel gain
- *                        -120 �� +60 [*0.1 dB] = -12 �� +6 dB external source signal gain
- *                        0 = 0 dB (default)
- *END**************************************************************************/
-uint8_t Set_Input_Scaler (uint8_t * buf, TEF668x_Module module, uint16_t source, int16_t gain) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Audio) {
-        PSet_Input_Scaler   pSet_Input_Scaler ;
-        XDATA16             tmp ;
-
-        pSet_Input_Scaler = (PSet_Input_Scaler)buf ;
-        memset (buf, '\0', sizeof (SSet_Input_Scaler)) ;
-
-        pSet_Input_Scaler->module           = TEF668x_Module_Audio ;
-        pSet_Input_Scaler->cmd              = TEF668x_cmd_Set_Input_Scaler ;
-        pSet_Input_Scaler->index            = 1 ;
-
-        tmp.udata16                         = source ;
-        pSet_Input_Scaler->source_hi        = tmp.hibyte ;
-        pSet_Input_Scaler->source_lo        = tmp.lobyte ;
-
-        tmp.data16                          = gain ;
-        pSet_Input_Scaler->gain_hi          = tmp.hibyte ;
-        pSet_Input_Scaler->gain_lo          = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_Input_Scaler) ;
-    }   // if (module == TEF668x_Module_Audio)
-
-    return (ret_val) ;
-}   // uint8_t Set_Input_Scaler (uint8_t * buf, TEF668x_Module module, uint16_t source, int16_t gain)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_WaveGen
- * Description   : Definition of the internal sine wave and offset generator signal.
- *                 The wave generator can be selected as an audio source
- *                 (see 3.32 AUDIO cmd 12 Set_Input) and is intended for test
- *                 purposes only.
- * Parameters    :
- *                 mode : audio source
- *                        0 = wave signal off (default)
- *                        1 = wave 1 signal on Left channel
- *                        2 = wave 2 signal on Right channel
- *                        3 = wave 1 signal on Left channel and wave 2 signal on Right channel
- *                        5 = wave 1 signal on Left and Right channel
- *                        6 = wave 2 signal on Left and Right channel
- *                        7 = wave 1 + wave 2 signal on Left and Right channel
- *                 offset : DC offset
- *                        -32768 �� + 32767 (* 1 LSB of 16 bit) = max negative �� max positive.
- *                        0 = no offset (default)
- *                 amplitude1 : wave 1 amplitude
- *                        -300 �� 0 (*0.1 dB) = -30 �� 0 dB
- *                        -200 = -20 dB (default)
- *                 frequency1 : wave 1 frequency
- *                        10 �� 20000 (*1 Hz) = 10 Hz �� 20 kHz
- *                        400 = 400 Hz (default)
- *                 amplitude2 : wave 2 amplitude
- *                        -300 �� 0 (*0.1 dB) = -30 �� 0 dB
- *                        -200 = -20 dB (default)
- *                 frequency2 : wave 2 frequency
- *                        10 �� 20000 (*1 Hz) = 10 Hz �� 20 kHz
- *                        1000 = 1 kHz (default)
- *END**************************************************************************/
-uint8_t Set_WaveGen (uint8_t * buf, TEF668x_Module module, uint16_t mode, int16_t offset, int16_t amplitude1, uint16_t frequency1, int16_t amplitude2, uint16_t frequency2) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_Audio) {
-        PSet_WaveGen    pSet_WaveGen ;
-        XDATA16         tmp ;
-
-        pSet_WaveGen = (PSet_WaveGen)buf ;
-        memset (buf, '\0', sizeof (SSet_WaveGen)) ;
-
-        pSet_WaveGen->module                = TEF668x_Module_Audio ;
-        pSet_WaveGen->cmd                   = TEF668x_cmd_Set_WaveGen ;
-        pSet_WaveGen->index                 = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_WaveGen->mode_hi               = tmp.hibyte ;
-        pSet_WaveGen->mode_lo               = tmp.lobyte ;
-
-        tmp.data16                          = offset ;
-        pSet_WaveGen->offset_hi             = tmp.hibyte ;
-        pSet_WaveGen->offset_lo             = tmp.lobyte ;
-
-        tmp.data16                          = amplitude1 ;
-        pSet_WaveGen->amplitude1_hi         = tmp.hibyte ;
-        pSet_WaveGen->amplitude1_lo         = tmp.lobyte ;
-
-        tmp.udata16                         = frequency1 ;
-        pSet_WaveGen->frequency1_hi         = tmp.hibyte ;
-        pSet_WaveGen->frequency1_lo         = tmp.lobyte ;
-
-        tmp.data16                          = amplitude2 ;
-        pSet_WaveGen->amplitude2_hi         = tmp.hibyte ;
-        pSet_WaveGen->amplitude2_lo         = tmp.lobyte ;
-
-        tmp.udata16                         = frequency2 ;
-        pSet_WaveGen->frequency2_hi         = tmp.hibyte ;
-        pSet_WaveGen->frequency2_lo         = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_WaveGen) ;
-    }   // if (module == TEF668x_Module_Audio)
-
-    return (ret_val) ;
-}   // uint8_t Set_WaveGen (uint8_t * buf, TEF668x_Module module, uint16_t mode, int16_t offset, int16_t amplitude1, uint16_t frequency1, int16_t amplitude2, uint16_t frequency2)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_OperationMode
- * Description   : Device power control.
- * Parameters    :
- *                 mode : device operation mode
- *                        0 = normal operation
- *                        1 = radio standby mode (low-power mode without radio functionality)
- *                        (default)
- *END**************************************************************************/
-uint8_t Set_OperationMode (uint8_t * buf, TEF668x_Module module, uint16_t mode) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_APPL) {
-        PSet_OperationMode  pSet_OperationMode ;
-        XDATA16             tmp ;
-
-        pSet_OperationMode = (PSet_OperationMode)buf ;
-        memset (buf, '\0', sizeof (SSet_OperationMode)) ;
-
-        pSet_OperationMode->module          = TEF668x_Module_APPL ;
-        pSet_OperationMode->cmd             = TEF668x_cmd_Set_OperationMode ;
-        pSet_OperationMode->index           = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_OperationMode->mode_hi         = tmp.hibyte ;
-        pSet_OperationMode->mode_lo         = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_OperationMode) ;
-    }   // if (module == TEF668x_Module_APPL)
-
-    return (ret_val) ;
-}   // uint8_t Set_OperationMode (uint8_t * buf, TEF668x_Module module, uint16_t mode)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_GPIO
- * Description   : Define general purpose and application pin use.
- * Parameters    :
- *                 pin : GPIO number
- *                        0 �� 2 = GPIO number
- *                 module : module
- *                        32 = FM
- *                        33 = AM
- *                 feature : feature
- *                        0 = no use (default) (FM / AM)
- *                        1 = general purpose input (FM / AM)
- *                        2 = general purpose output ��0�� (FM / AM)
- *                        3 = general purpose output ��1�� (FM / AM)
- *                        257 = output RDS (FM : see cmd 81 �AVN��)
- *                        258 = output QSI (FM / AM : see cmd 82 �imer and AF_Update flag��)
- *                        259 = output QSI + RDS (active �ow�� if �AVN�� is active or �SI�� is active)
- *                        260 = output RDDA (FM : see cmd 81 �DDA, RDCL legacy option��)
- *                        261 = output RDCL (FM : see cmd 81 �DDA, RDCL legacy option��)
- *                        262 = output AGC (FM : see cmd 11 �GC step extension��)
- *END**************************************************************************/
-uint8_t Set_GPIO (uint8_t * buf, TEF668x_Module module, uint16_t pin, TEF668x_Module op_module, uint16_t feature) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_APPL && (op_module == TEF668x_Module_Radio_FM || op_module == TEF668x_Module_Radio_AM)) {
-        PSet_GPIO   pSet_GPIO ;
-        XDATA16     tmp ;
-
-        pSet_GPIO = (PSet_GPIO)buf ;
-        memset (buf, '\0', sizeof (SSet_GPIO)) ;
-
-        pSet_GPIO->module                   = TEF668x_Module_APPL ;
-        pSet_GPIO->cmd                      = TEF668x_cmd_Set_GPIO ;
-        pSet_GPIO->index                    = 1 ;
-
-        tmp.udata16                         = pin ;
-        pSet_GPIO->pin_hi                   = tmp.hibyte ;
-        pSet_GPIO->pin_lo                   = tmp.lobyte ;
-
-        tmp.udata16                         = op_module ;
-        pSet_GPIO->module_hi                = tmp.hibyte ;
-        pSet_GPIO->module_lo                = tmp.lobyte ;
-
-        tmp.udata16                         = feature ;
-        pSet_GPIO->feature_hi               = tmp.hibyte ;
-        pSet_GPIO->feature_lo               = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_GPIO) ;
-    }   // if (module == TEF668x_Module_APPL && (op_module == TEF668x_Module_Radio_FM || op_module == TEF668x_Module_Radio_AM))
-
-    return (ret_val) ;
-}   // uint8_t Set_GPIO (uint8_t * buf, TEF668x_Module module, uint16_t pin, TEF668x_Module op_module, uint16_t feature)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_ReferenceClock
- * Description   : This command is only available during �dle state��.
- *                 Several different frequencies can be used for the crystal
- *                 oscillator or the external reference clock. For proper
- *                 functioning the reference frequency must be entered before
- *                 activation of the device, the command is therefore available
- *                 during �dle�� state only.
- * Parameters    :
- *                 frequency_msb : MSB part of the reference clock frequency
- *                        [ 31:16 ]
- *                 frequency_lsb : LSB part of the reference clock frequency
- *                        [ 15:0 ]
- *                        frequency [*1 Hz]
- *                        (default = 9216000 )
- *                 clock_type : clock type
- *                        0 = crystal oscillator operation (default)
- *                        1 = external clock input operation
- *END**************************************************************************/
-uint8_t Set_ReferenceClock (uint8_t * buf, TEF668x_Module module, uint16_t frequency_msb, uint16_t frequency_lsb, uint16_t clock_type) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_APPL) {
-        PSet_ReferenceClock pSet_ReferenceClock ;
-        XDATA16             tmp ;
-
-        pSet_ReferenceClock = (PSet_ReferenceClock)buf ;
-        memset (buf, '\0', sizeof (SSet_ReferenceClock)) ;
-
-        pSet_ReferenceClock->module         = TEF668x_Module_APPL ;
-        pSet_ReferenceClock->cmd            = TEF668x_cmd_Set_ReferenceClock ;
-        pSet_ReferenceClock->index          = 1 ;
-
-        tmp.udata16                         = frequency_msb ;
-        pSet_ReferenceClock->frequency_msb_hi = tmp.hibyte ;
-        pSet_ReferenceClock->frequency_msb_lo = tmp.lobyte ;
-
-        tmp.udata16                         = frequency_lsb ;
-        pSet_ReferenceClock->frequency_lsb_hi = tmp.hibyte ;
-        pSet_ReferenceClock->frequency_lsb_lo = tmp.lobyte ;
-
-        tmp.udata16                         = clock_type ;
-        pSet_ReferenceClock->type_hi        = tmp.hibyte ;
-        pSet_ReferenceClock->type_lo        = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_ReferenceClock) ;
-    }   // if (module == TEF668x_Module_APPL)
-
-    return (ret_val) ;
-}   // uint8_t Set_ReferenceClock (uint8_t * buf, TEF668x_Module module, uint16_t frequency_msb, uint16_t frequency_lsb, uint16_t clock_type)
-
-/*FUNCTION**********************************************************************
- *
- * Function Name : Set_APPL_Activate
- * Description   : This command is only available during �dle state��.
- *                 After the reference clock frequency has been defined the device
- *                 must be put in active state to allow for further initialization
- *                 and control. After activation the device will be in operational
- *                 mode �adio standby��.
- * Parameters    :
- *                 mode :
- *                        1 = goto �ctive�� state with operation mode of �adio standby��
- *END**************************************************************************/
-uint8_t Set_APPL_Activate (uint8_t * buf, TEF668x_Module module, uint16_t mode) {
-    uint8_t             ret_val = 0 ;
-
-    if (module == TEF668x_Module_APPL) {
-        PSet_APPL_Activate  pSet_APPL_Activate ;
-        XDATA16             tmp ;
-
-        pSet_APPL_Activate = (PSet_APPL_Activate)buf ;
-        memset (buf, '\0', sizeof (SSet_APPL_Activate)) ;
-
-        pSet_APPL_Activate->module          = TEF668x_Module_APPL ;
-        pSet_APPL_Activate->cmd             = TEF668x_cmd_Activate ;
-        pSet_APPL_Activate->index           = 1 ;
-
-        tmp.udata16                         = mode ;
-        pSet_APPL_Activate->mode_hi         = tmp.hibyte ;
-        pSet_APPL_Activate->mode_lo         = tmp.lobyte ;
-
-        ret_val                             = sizeof (SSet_APPL_Activate) ;
-    }   // if (module == TEF668x_Module_APPL)
-
-    return (ret_val) ;
-}   // uint8_t Set_ReferenceClock (uint8_t * buf, TEF668x_Module module, uint16_t frequency_msb, uint16_t frequency_lsb, uint16_t clock_type)
+status_t GetState_TEF668x (void) {
+    if (state_TEF668x == TEF668x_STATE_STANDBY) {
+        return (STATUS_SUCCESS) ;
+    }   //if (state_TEF668x == TEF668x_STATE_STANDBY)
+    return (STATUS_BUSY) ;
+}   // status_t GetState_TEF668x (void)
+
+status_t SetState_TEF668x (TEF668x_STATE new_state) {
+    if (state_TEF668x == TEF668x_STATE_STANDBY) {
+        state_TEF668x = new_state ;
+
+        return (STATUS_SUCCESS) ;
+    }   //if (state_TEF668x == TEF668x_STATE_STANDBY)
+    return (STATUS_BUSY) ;
+}   // status_t SetState_TEF668x (TEF668x_STATE new_state)
+
+status_t TEF668x_api (uint8_t cmd, PFUNCvS cb, uint8_t argc, ...) {
+    status_t        ret_state = STATUS_BUSY ;
+
+#if (TEF668x_API_DEBUG == 0)
+    if (GetState_TEF668x() == STATUS_SUCCESS && GetI2CExecuteState() == (status_t)I2C_SUCCESS) {
+#endif  // #if (TEF668x_API_DEBUG == 0)
+        va_list va;
+        XDATA16 tmp ;
+
+        va_start(va, argc);
+        memset(TEF668x_Buf, '\0', MAX_TEF668x_BUF) ;
+        ret_state = STATUS_UNSUPPORTED ;
+        tuner_api_callback = cb ;
+
+        switch (cmd) {
+            case TEF668X_API_FM_Tune_To :
+            case TEF668X_API_AM_Set_Tune_To :
+                {
+                    PSetTune_To     pTune_To ;
+
+                    pTune_To = (PSetTune_To)TEF668x_Buf ;
+
+                    if (cmd == TEF668X_API_FM_Tune_To) {
+                        pTune_To->module= TEF668x_Module_Radio_FM ;
+                    }
+                    else {
+                        pTune_To->module= TEF668x_Module_Radio_AM ;
+                    }
+                    pTune_To->cmd   = TEF668x_cmd_Tune_To ;
+                    pTune_To->index = 1 ;
+
+                    tmp.udata16 = va_arg(va, int) ;
+                    pTune_To->tuning_actions_hi         = tmp.hibyte ;
+                    pTune_To->tuning_actions_lo         = tmp.lobyte ;
+                    if (tmp.udata16 == Tuning_Actions_Mode_End) {
+#if (TEF668x_API_DEBUG == 0)
+                        SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                        I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                        , TEF668x_Buf
+                                        , 5
+                                        , Handle_TEF668x_Service
+                                        ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+                        ret_state = STATUS_SUCCESS ;
+                    }   // if (tmp == Tuning_Actions_Mode_End)
+                    else  {
+                        if (cmd == TEF668X_API_FM_Tune_To) {
+                            if (tmp.udata16 > Tuning_Actions_Mode_End
+                             || tmp.udata16 == Tuning_Actions_Mode_No_Action
+                            ) {
+                                break ;
+                            }
+                        }
+                        else if (tmp.udata16 > Tuning_Actions_Mode_Search
+                              || tmp.udata16 == Tuning_Actions_Mode_No_Action
+                             ) {
+                            break ;
+                        }
+                        tmp.udata16 = va_arg(va, int) ;
+                        pTune_To->tuning_frequency_hi   = tmp.hibyte ;
+                        pTune_To->tuning_frequency_lo   = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                        SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                        I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                        , TEF668x_Buf
+                                        , 7
+                                        , Handle_TEF668x_Service
+                                        ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+                        ret_state = STATUS_SUCCESS ;
+                    }   // if (tmp.udata16 < Tuning_Actions_Mode_End && tmp.udata16 > Tuning_Actions_Mode_No_Action)
+                }
+                break ;
+            case TEF668X_API_FM_Set_Tune_Options :
+                {
+                    PSet_Tune_Options   pSet_Tune_Options ;
+
+                    pSet_Tune_Options = (PSet_Tune_Options)TEF668x_Buf ;
+
+                    pSet_Tune_Options->module= TEF668x_Module_Radio_FM ;
+                    pSet_Tune_Options->cmd   = TEF668x_cmd_Set_Tune_Options ;
+                    pSet_Tune_Options->index = 1 ;
+
+                    tmp.udata16 = va_arg(va, int) ;
+                    if (tmp.udata16 == AFU_BW_MODE_FIXED
+                     || tmp.udata16 == AFU_BW_MODE_AUTOMATIC_BANDWIDTH
+                    ) {
+                        // IF bandwidth control mode during AF_Update
+                        pSet_Tune_Options->afu_bw_mode_hi = tmp.hibyte ;
+                        pSet_Tune_Options->afu_bw_mode_lo = tmp.lobyte ;
+
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 >= MIN_AFU_FIXED_IF_BANDWIDTH
+                         && tmp.udata16 <= MAX_AFU_FIXED_IF_BANDWIDTH
+                        ) {
+                            // fixed IF bandwidth during AF_Update
+                            pSet_Tune_Options->afu_bandwidth_hi = tmp.hibyte ;
+                            pSet_Tune_Options->afu_bandwidth_lo = tmp.lobyte ;
+
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 >= MIN_AFU_MUTE_TIME
+                             && tmp.udata16 <= MAX_AFU_MUTE_TIME
+                            ) {
+                                // AF_update inaudible mute slope time
+                                pSet_Tune_Options->afu_mute_time_hi = tmp.hibyte ;
+                                pSet_Tune_Options->afu_mute_time_lo = tmp.lobyte ;
+
+                                tmp.udata16 = va_arg(va, int) ;
+                                if (tmp.udata16 >= MIN_AFU_SAMPLE_TIME
+                                 && tmp.udata16 <= MAX_AFU_SAMPLE_TIME
+                                ) {
+                                    pSet_Tune_Options->afu_sample_time_hi = tmp.hibyte ;
+                                    pSet_Tune_Options->afu_sample_time_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                    SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                    I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                    , TEF668x_Buf
+                                                    , 11
+                                                    , Handle_TEF668x_Service
+                                                    ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                    ret_state = STATUS_SUCCESS ;
+                                }   // if (tmp.udata16 >= MIN_AFU_SAMPLE_TIME && tmp.udata16 <= MAX_AFU_SAMPLE_TIME)
+                            }   // if (tmp.udata16 >= MIN_AFU_MUTE_TIME && tmp.udata16 <= MAX_AFU_MUTE_TIME)
+                        }   // if (tmp.udata16 >= MIN_AFU_FIXED_IF_BANDWIDTH && tmp.udata16 <= MAX_AFU_FIXED_IF_BANDWIDTH)
+                    }   // if (tmp.udata16 == AFU_BW_MODE_FIXED || tmp.udata16 == AFU_BW_MODE_AUTOMATIC_BANDWIDTH)
+                }
+                break ;
+            case TEF668X_API_FM_Set_Bandwidth :
+            case TEF668X_API_AM_Set_Bandwidth :
+                {
+                    PSet_Bandwidth_FM   pSet_Bandwidth_FM ;
+#if (TEF668x_API_DEBUG == 0)
+                    uint8_t             write_len = 0 ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                    pSet_Bandwidth_FM = (PSet_Bandwidth_FM)TEF668x_Buf ;
+
+                    if (cmd == TEF668X_API_FM_Set_Bandwidth) {
+                        pSet_Bandwidth_FM->module= TEF668x_Module_Radio_FM ;
+                    }
+                    else {
+                        pSet_Bandwidth_FM->module= TEF668x_Module_Radio_AM ;
+                    }
+                    pSet_Bandwidth_FM->cmd   = TEF668x_cmd_Set_Bandwidth ;
+                    pSet_Bandwidth_FM->index = 1 ;
+
+                    // IF bandwidth control mode
+                    tmp.udata16 = va_arg(va, int) ;
+                    if (cmd == TEF668X_API_FM_Set_Bandwidth) {
+                        if (tmp.udata16 == IF_BandWidth_Control_Mode_Fixed
+                         || tmp.udata16 == IF_BandWidth_Control_Mode_Automatic
+                        ) {
+                            pSet_Bandwidth_FM->IF_bandwidth_control_mode_hi = tmp.hibyte ;
+                            pSet_Bandwidth_FM->IF_bandwidth_control_mode_lo = tmp.lobyte ;
+
+                            // fixed IF bandwidth
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 >= MIN_AFU_FIXED_IF_BANDWIDTH
+                             && tmp.udata16 <= MAX_AFU_FIXED_IF_BANDWIDTH
+                            ) {
+                                pSet_Bandwidth_FM->bandwidth_hi = tmp.hibyte ;
+                                pSet_Bandwidth_FM->bandwidth_lo = tmp.lobyte ;
+
+                                // FM automatic IF bandwidth control sensitivity
+                                tmp.udata16 = va_arg(va, int) ;
+                                if (tmp.udata16 >= 500
+                                 && tmp.udata16 <= 1500
+                                ) {
+                                    pSet_Bandwidth_FM->control_sensitivity_hi = tmp.hibyte ;
+                                    pSet_Bandwidth_FM->control_sensitivity_lo = tmp.lobyte ;
+
+                                    // FM automatic IF bandwidth control sensitivity for low level conditions
+                                    tmp.udata16 = va_arg(va, int) ;
+                                    if (tmp.udata16 >= 500
+                                     && tmp.udata16 <= 1500
+                                    ) {
+                                        pSet_Bandwidth_FM->low_level_sensitivity_hi = tmp.hibyte ;
+                                        pSet_Bandwidth_FM->low_level_sensitivity_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                        write_len = 11 ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+                                        if (argc > 4) {
+                                            // extended API: FM minimum IF bandwidth
+                                            tmp.udata16 = va_arg(va, int) ;
+                                            if (tmp.udata16 >= 560
+                                             && tmp.udata16 <= 1140
+                                            ) {
+                                                pSet_Bandwidth_FM->min_bandwidth_hi = tmp.hibyte ;
+                                                pSet_Bandwidth_FM->min_bandwidth_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                                write_len = 13 ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+                                                if (argc > 5) {
+                                                    // extended API: FM automatic IF bandwidth control nominal bandwidth
+                                                    tmp.udata16 = va_arg(va, int) ;
+                                                    if (tmp.udata16 >= 1510
+                                                     && tmp.udata16 <= 2360
+                                                    ) {
+                                                        pSet_Bandwidth_FM->nominal_bandwidth_hi = tmp.hibyte ;
+                                                        pSet_Bandwidth_FM->nominal_bandwidth_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                                        write_len = 15 ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+                                                        if (argc > 6) {
+                                                            // extended API: FM automatic IF bandwidth control attack timing
+                                                            tmp.udata16 = va_arg(va, int) ;
+                                                            if (tmp.udata16 >= 150
+                                                             && tmp.udata16 <= 450
+                                                            ) {
+                                                                pSet_Bandwidth_FM->control_attack_hi = tmp.hibyte ;
+                                                                pSet_Bandwidth_FM->control_attack_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                                                write_len = 17 ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+                                                            }   // if (tmp.udata16 >= 150 && tmp.udata16 <= 450)
+                                                        }   // if (argc > 6)
+                                                    }   // if (tmp.udata16 >= 1510 && tmp.udata16 <= 2360)
+                                                }   // if (argc > 5)
+                                            }   // if (tmp.udata16 >= 560 && tmp.udata16 <= 1140)
+                                        }   // if (argc > 4)
+
+#if (TEF668x_API_DEBUG == 0)
+                                        SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                        I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                        , TEF668x_Buf
+                                                        , write_len
+                                                        , Handle_TEF668x_Service
+                                                        ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                        ret_state = STATUS_SUCCESS ;
+                                    }   // if (tmp.udata16 >= 500 && tmp.udata16 <= 1500)
+                                }   // if (tmp.udata16 >= 500 && tmp.udata16 <= 1500)
+                            }   // if (tmp.udata16 >= MIN_AFU_FIXED_IF_BANDWIDTH && tmp.udata16 <= MAX_AFU_FIXED_IF_BANDWIDTH)
+                        }   // if (tmp.udata16 == IF_BandWidth_Control_Mode_Fixed || tmp.udata16 == IF_BandWidth_Control_Mode_Automatic)
+                    }   // if (cmd == TEF668X_API_FM_Set_Bandwidth)
+                    else if (tmp.udata16 == IF_BandWidth_Control_Mode_Fixed) {
+                        // cmd == TEF668X_API_AM_Set_Bandwidth
+                        pSet_Bandwidth_FM->IF_bandwidth_control_mode_hi = tmp.hibyte ;
+                        pSet_Bandwidth_FM->IF_bandwidth_control_mode_lo = tmp.lobyte ;
+
+                        // fixed IF bandwidth
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 >= 30
+                         && tmp.udata16 <= 80
+                        ) {
+                            pSet_Bandwidth_FM->bandwidth_hi = tmp.hibyte ;
+                            pSet_Bandwidth_FM->bandwidth_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                            SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                            I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                            , TEF668x_Buf
+                                            , 7
+                                            , Handle_TEF668x_Service
+                                            ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                            ret_state = STATUS_SUCCESS ;
+                        }   // if (tmp.udata16 >= 30 && tmp.udata16 <= 80)
+                    }   // if (tmp.udata16 == IF_BandWidth_Control_Mode_Fixed)
+                }
+                break ;
+            case TEF668X_API_FM_Set_RFAGC :
+            case TEF668X_API_AM_Set_RFAGC :
+                {
+                    PSet_RFAGC  pSet_RFAGC ;
+
+                    pSet_RFAGC = (PSet_RFAGC)TEF668x_Buf ;
+
+                    if (cmd == TEF668X_API_FM_Set_RFAGC) {
+                        pSet_RFAGC->module= TEF668x_Module_Radio_FM ;
+                    }   // if (cmd == TEF668X_API_FM_Set_RFAGC)
+                    else {
+                        pSet_RFAGC->module= TEF668x_Module_Radio_AM ;
+                    }   // if (cmd == TEF668X_API_AM_Set_RFAGC)
+                    pSet_RFAGC->cmd   = TEF668x_cmd_Set_RFAGC ;
+                    pSet_RFAGC->index = 1 ;
+
+                    // RF AGC start
+                    tmp.udata16 = va_arg(va, int) ;
+                    if (cmd == TEF668X_API_FM_Set_RFAGC) {
+                        if (840 <= tmp.udata16
+                         && tmp.udata16 <= 920
+                        ) {
+                            pSet_RFAGC->start_hi = tmp.hibyte ;
+                            pSet_RFAGC->start_lo = tmp.lobyte ;
+
+                            // RF AGC step extension
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 == 0
+                             || tmp.udata16 == 1
+                            ) {
+                                pSet_RFAGC->extension_hi = tmp.hibyte ;
+                                pSet_RFAGC->extension_lo = tmp.lobyte ;
+                            }   // if (tmp.udata16 == 0 || tmp.udata16 == 1)
+                            else {
+                                break ;
+                            }
+                        }   // if (840 <= tmp.udata16 && tmp.udata16 <= 920)
+                        else {
+                            break ;
+                        }
+                    }   // if (cmd == TEF668X_API_FM_Set_RFAGC)
+                    else {
+                        if (940 <= tmp.udata16
+                         && tmp.udata16 <= 1020
+                        ) {
+                            pSet_RFAGC->start_hi = tmp.hibyte ;
+                            pSet_RFAGC->start_lo = tmp.lobyte ;
+                        }   // if (940 <= tmp.udata16 && tmp.udata16 <= 1020)
+                        else {
+                            break ;
+                        }
+                    }   // if (cmd == TEF668X_API_FM_Set_RFAGC)
+
+#if (TEF668x_API_DEBUG == 0)
+                    SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                    I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                    , TEF668x_Buf
+                                    , 5
+                                    , Handle_TEF668x_Service
+                                    ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                    ret_state = STATUS_SUCCESS ;
+                }
+                break ;
+            case TEF668X_API_FM_Set_Antenna :
+            case TEF668X_API_AM_Set_Antenna :
+                {
+                    PSet_Antenna    pSet_Antenna ;
+#if (TEF668x_API_DEBUG == 0)
+                    uint8_t         write_len = 0 ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                    pSet_Antenna = (PSet_Antenna)TEF668x_Buf ;
+
+                    if (cmd == TEF668X_API_FM_Set_Antenna) {
+                        // LNA gain reduction, FM LNA attenuation setting used during FM off, callback
+                        if (argc != 2) {
+                            break ;
+                        }
+                        else {
+                            pSet_Antenna->module= TEF668x_Module_Radio_FM ;
+                        }
+                    }   // if (cmd == TEF668X_API_FM_Set_Antenna)
+                    else {
+                        // LNA gain reduction, callback
+                        if (argc != 1) {
+                            break ;
+                        }
+                        else {
+                            pSet_Antenna->module= TEF668x_Module_Radio_AM ;
+                        }
+                    }   // if (cmd == TEF668X_API_AM_Set_Antenna)
+                    pSet_Antenna->cmd   = TEF668x_cmd_Set_Antenna ;
+                    pSet_Antenna->index = 1 ;
+
+                    // LNA gain reduction
+                    tmp.udata16 = va_arg(va, int) ;
+                    if (tmp.udata16 == 0                //  0 dB
+                     || tmp.udata16 == 60               //  6 dB
+                     || tmp.udata16 == 120              // 12 dB
+                     || tmp.udata16 == 180              // 18 dB
+                     || tmp.udata16 == 240              // 24 dB
+                     || tmp.udata16 == 300              // 30 dB
+                     || tmp.udata16 == 360              // 36 dB
+                     ) {
+                        pSet_Antenna->attenuation_hi = tmp.hibyte ;
+                        pSet_Antenna->attenuation_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                        write_len = 5 ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                        if (cmd == TEF668X_API_FM_Set_Antenna) {
+                            // FM LNA attenuation setting used during FM off
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 == 300      // 30 dB
+                             || tmp.udata16 == 420      // 42 dB
+                             ) {
+                                pSet_Antenna->off_mode_hi = tmp.hibyte ;
+                                pSet_Antenna->off_mode_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                write_len = 7 ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+                            }
+                            else {
+                                break ;
+                            }   // if (tmp.udata16 == 300 || tmp.udata16 == 420 )
+                        }   // if (cmd == TEF668X_API_FM_Set_Antenna)
+
+#if (TEF668x_API_DEBUG == 0)
+                        SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                        I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                        , TEF668x_Buf
+                                        , write_len
+                                        , Handle_TEF668x_Service
+                                        ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                        ret_state = STATUS_SUCCESS ;
+                    }
+                    else {
+                        break ;
+                    }
+                }
+                break ;
+            case TEF668X_API_FM_Set_MphSuppression :
+                {
+                    if (argc == 1) {
+                        PSet_MphSuppression pSet_MphSuppression ;
+
+                        pSet_MphSuppression = (PSet_MphSuppression)TEF668x_Buf ;
+
+                        pSet_MphSuppression->module = TEF668x_Module_Radio_FM ;
+                        pSet_MphSuppression->cmd    = TEF668x_cmd_Set_MphSuppression ;
+                        pSet_MphSuppression->index  = 1 ;
+
+                        // FM multiple path suppression
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 == 0        // off (default)
+                         || tmp.udata16 == 1        // on
+                         ) {
+                            pSet_MphSuppression->mode_hi = tmp.hibyte ;
+                            pSet_MphSuppression->mode_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                            SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                            I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                            , TEF668x_Buf
+                                            , 5
+                                            , Handle_TEF668x_Service
+                                            ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                            ret_state = STATUS_SUCCESS ;
+                        }   // if (tmp.udata16 == 0 || tmp.udata16 == 1)
+                    }   // if (argc == 1)
+                }
+                break ;
+            case TEF668X_API_FM_Set_ChannelEqualizer :
+                {
+                    if (argc == 1) {
+                        PSet_ChannelEqualizer   pSet_ChannelEqualizer ;
+
+                        pSet_ChannelEqualizer = (PSet_ChannelEqualizer)TEF668x_Buf ;
+
+                        pSet_ChannelEqualizer->module = TEF668x_Module_Radio_FM ;
+                        pSet_ChannelEqualizer->cmd    = TEF668x_cmd_Set_ChannelEqualizer ;
+                        pSet_ChannelEqualizer->index  = 1 ;
+
+                        // FM channel equalizer
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 == 0        // off (default)
+                         || tmp.udata16 == 1        // on
+                         ) {
+                            pSet_ChannelEqualizer->mode_hi = tmp.hibyte ;
+                            pSet_ChannelEqualizer->mode_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                            SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                            I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                            , TEF668x_Buf
+                                            , 5
+                                            , Handle_TEF668x_Service
+                                            ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                            ret_state = STATUS_SUCCESS ;
+                        }   // if (tmp.udata16 == 0 || tmp.udata16 == 1)
+                    }   // if (argc == 1)
+                }
+                break ;
+            case TEF668X_API_FM_Set_NoiseBlanker :
+            case TEF668X_API_AM_Set_NoiseBlanker :
+                {
+                    PSet_NoiseBlanker   pSet_NoiseBlanker ;
+#if (TEF668x_API_DEBUG == 0)
+                    uint8_t             write_len = 0 ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                    pSet_NoiseBlanker = (PSet_NoiseBlanker)TEF668x_Buf ;
+
+                    if (cmd == TEF668X_API_FM_Set_NoiseBlanker) {
+                        pSet_NoiseBlanker->module = TEF668x_Module_Radio_FM ;
+                    }   // if (cmd == TEF668X_API_FM_Set_NoiseBlanker)
+                    else {
+                        pSet_NoiseBlanker->module = TEF668x_Module_Radio_AM ;
+                    }
+                    pSet_NoiseBlanker->cmd    = TEF668x_cmd_Set_NoiseBlanker ;
+                    pSet_NoiseBlanker->index  = 1 ;
+
+                    // noise blanker
+                    tmp.udata16 = va_arg(va, int) ;
+                    if (tmp.udata16 == 0        // off (default)
+                     || tmp.udata16 == 1        // on
+                     ) {
+                        pSet_NoiseBlanker->mode_hi = tmp.hibyte ;
+                        pSet_NoiseBlanker->mode_lo = tmp.lobyte ;
+
+                        // trigger sensitivity
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 >= 500  // 50%
+                         && tmp.udata16 <= 1500 // 150%
+                         ) {
+                            pSet_NoiseBlanker->sensitivity_hi = tmp.hibyte ;
+                            pSet_NoiseBlanker->sensitivity_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                            write_len = 7 ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+                            if (cmd == TEF668X_API_FM_Set_NoiseBlanker) {
+                                // trigger sensitivity on level detection
+                                tmp.udata16 = va_arg(va, int) ;
+                                if (tmp.udata16 >= 500  // 50%
+                                 && tmp.udata16 <= 1500 // 150%
+                                 ) {
+                                    pSet_NoiseBlanker->level_sensitivity_hi = tmp.hibyte ;
+                                    pSet_NoiseBlanker->level_sensitivity_lo = tmp.lobyte ;
+#if (TEF668x_API_DEBUG == 0)
+                                    write_len = 9 ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+                                    if (argc > 3) {
+                                        // extended API: modulation dependency on trigger sensitivity
+                                        tmp.udata16 = va_arg(va, int) ;
+                                        if (tmp.udata16 >= 330  // 33%
+                                         && tmp.udata16 <= 1660 // 166%
+                                         ) {
+                                            pSet_NoiseBlanker->modulation_hi = tmp.hibyte ;
+                                            pSet_NoiseBlanker->modulation_lo = tmp.lobyte ;
+#if (TEF668x_API_DEBUG == 0)
+                                            write_len = 11 ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+                                            if (argc > 4) {
+                                                // extended API: sensitivity offset
+                                                tmp.udata16 = va_arg(va, int) ;
+                                                if (tmp.udata16 >= 25   // 2.5%
+                                                 && tmp.udata16 <= 200  // 20%
+                                                 ) {
+                                                    pSet_NoiseBlanker->offset_hi = tmp.hibyte ;
+                                                    pSet_NoiseBlanker->offset_lo = tmp.lobyte ;
+#if (TEF668x_API_DEBUG == 0)
+                                                    write_len = 13 ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+                                                    if (argc > 5) {
+                                                        // extended API: trigger reference attack time
+                                                        tmp.udata16 = va_arg(va, int) ;
+                                                        if (tmp.udata16 >= 15   // 15 us
+                                                         && tmp.udata16 <= 1200 // 1200 us
+                                                         ) {
+                                                            pSet_NoiseBlanker->attack_hi = tmp.hibyte ;
+                                                            pSet_NoiseBlanker->attack_lo = tmp.lobyte ;
+#if (TEF668x_API_DEBUG == 0)
+                                                            write_len = 15 ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+                                                            if (argc > 6) {
+                                                                // extended API: trigger reference decay time
+                                                                tmp.udata16 = va_arg(va, int) ;
+                                                                if (tmp.udata16 >= 150  // 150 us
+                                                                 && tmp.udata16 <= 6000 // 6 ms
+                                                                 ) {
+                                                                    pSet_NoiseBlanker->decay_hi = tmp.hibyte ;
+                                                                    pSet_NoiseBlanker->decay_lo = tmp.lobyte ;
+#if (TEF668x_API_DEBUG == 0)
+                                                                    write_len = 17 ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+                                                                }   // if (tmp.udata16 >= 150 && tmp.udata16 <= 6000)
+                                                                else {
+                                                                    break ;
+                                                                }
+                                                            }   // if (argc > 6)
+                                                        }   // if (tmp.udata16 >= 15 && tmp.udata16 <= 1200)
+                                                        else {
+                                                            break ;
+                                                        }
+                                                    }   // if (argc > 5)
+                                                }   // if (tmp.udata16 >= 25 && tmp.udata16 <= 200)
+                                                else {
+                                                    break ;
+                                                }
+                                            }   // if (argc > 4)
+                                        }   // if (tmp.udata16 >= 330 && tmp.udata16 <= 1660)
+                                        else {
+                                            break ;
+                                        }
+                                    }   // if (argc > 3)
+                                }   // if (tmp.udata16 >= 500 && tmp.udata16 <= 1500)
+                                else {
+                                    break ;
+                                }
+                            }   // if (cmd == TEF668X_API_FM_Set_NoiseBlanker)
+                            else {
+                                if (argc > 2) {
+                                    // extended API: AM trigger sensitivity for noise conditions
+                                    tmp.udata16 = va_arg(va, int) ;
+                                    if (tmp.udata16 >= 600  // 60 %
+                                     && tmp.udata16 <= 1600 // 160 %
+                                    ) {
+                                        pSet_NoiseBlanker->gain_hi = tmp.hibyte ;
+                                        pSet_NoiseBlanker->gain_lo = tmp.lobyte ;
+#if (TEF668x_API_DEBUG == 0)
+                                        write_len = 9 ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+                                        if (argc > 3) {
+                                            // extended API: AM noise blanker blank time
+                                            tmp.udata16 = va_arg(va, int) ;
+                                            if (tmp.udata16 >= 25   // 25 us
+                                             && tmp.udata16 <= 250  // 250 us
+                                            ) {
+                                                pSet_NoiseBlanker->blank_time_hi = tmp.hibyte ;
+                                                pSet_NoiseBlanker->blank_time_lo = tmp.lobyte ;
+#if (TEF668x_API_DEBUG == 0)
+                                                write_len = 11 ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+                                            }   // if (tmp.udata16 >= 25 && tmp.udata16 <= 250)
+                                            else {
+                                                break ;
+                                            }
+                                        }   // if (argc > 3)
+                                    }   // if (tmp.udata16 >= 600 && tmp.udata16 <= 1600)
+                                    else {
+                                        break ;
+                                    }
+                                }   // if (argc > 2)
+                            }   // // if (cmd == TEF668X_API_AM_Set_NoiseBlanker)
+#if (TEF668x_API_DEBUG == 0)
+                            SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                            I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                            , TEF668x_Buf
+                                            , write_len
+                                            , Handle_TEF668x_Service
+                                            ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                            ret_state = STATUS_SUCCESS ;
+                        }   // if (tmp.udata16 >= 500 && tmp.udata16 <= 1500)
+                    }   // if (tmp.udata16 == 0 || tmp.udata16 == 1)
+                }
+                break ;
+            case TEF668X_API_FM_Set_NoiseBlanker_Options :
+                {
+                    if (argc == 4) {
+                        PSet_NoiseBlanker_Options   pSet_NoiseBlanker_Options ;
+
+                        pSet_NoiseBlanker_Options = (PSet_NoiseBlanker_Options)TEF668x_Buf ;
+
+                        pSet_NoiseBlanker_Options->module = TEF668x_Module_Radio_FM ;
+                        pSet_NoiseBlanker_Options->cmd    = TEF668x_cmd_Set_NoiseBlanker_Options ;
+                        pSet_NoiseBlanker_Options->index  = 1 ;
+
+                        // noise blanker blank time on low modulation
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 >= 75       // 75 µs pulse stretch time
+                         && tmp.udata16 <= 300      // 300 µs pulse stretch time
+                         ) {
+                            pSet_NoiseBlanker_Options->blank_time_hi = tmp.hibyte ;
+                            pSet_NoiseBlanker_Options->blank_time_lo = tmp.lobyte ;
+
+                            // noise blanker blank time on high modulation
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 >= 75       // 75 µs pulse stretch time
+                             && tmp.udata16 <= 300      // 300 µs pulse stretch time
+                             ) {
+                                pSet_NoiseBlanker_Options->blank_time2_hi = tmp.hibyte ;
+                                pSet_NoiseBlanker_Options->blank_time2_lo = tmp.lobyte ;
+
+                                // modulation dependent blank time
+                                tmp.udata16 = va_arg(va, int) ;
+                                if (tmp.udata16 >= 160      // 16 % modulation (= 12 … 125 kHz FM dev.)
+                                 && tmp.udata16 <= 1660     // 166 % modulation (= 12 … 125 kHz FM dev.)
+                                 ) {
+                                    pSet_NoiseBlanker_Options->blank_modulation_hi = tmp.hibyte ;
+                                    pSet_NoiseBlanker_Options->blank_modulation_lo = tmp.lobyte ;
+
+                                    // noise blanker blank time on level detection
+                                    tmp.udata16 = va_arg(va, int) ;
+                                    if (tmp.udata16 >= 100      // 100µs pulse stretch time
+                                     && tmp.udata16 <= 400      // 400µs pulse stretch time
+                                     ) {
+                                        pSet_NoiseBlanker_Options->blank_time_level_hi = tmp.hibyte ;
+                                        pSet_NoiseBlanker_Options->blank_time_level_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                        SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                        I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                        , TEF668x_Buf
+                                                        , 11
+                                                        , Handle_TEF668x_Service
+                                                        ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                        ret_state = STATUS_SUCCESS ;
+                                    }   // if (tmp.udata16 >= 100 && tmp.udata16 <= 400)
+                                }   // if (tmp.udata16 >= 160 && tmp.udata16 <= 1660)
+                            }   // if (tmp.udata16 >= 75 && tmp.udata16 <= 300)
+                        }   // if (tmp.udata16 >= 75 && tmp.udata16 <= 300)
+                    }   // if (argc == 4)
+                }
+                break ;
+            case TEF668X_API_FM_Set_DigitalRadio :
+            case TEF668X_API_AM_Set_DigitalRadio :
+                {
+                    if (argc == 1) {
+                        PSet_DigitalRadio   pSet_DigitalRadio ;
+
+                        pSet_DigitalRadio = (PSet_DigitalRadio)TEF668x_Buf ;
+
+                        if (cmd == TEF668X_API_FM_Set_DigitalRadio) {
+                            pSet_DigitalRadio->module = TEF668x_Module_Radio_FM ;
+                        }   // if (cmd == TEF668X_API_FM_Set_DigitalRadio)
+                        else {
+                            pSet_DigitalRadio->module = TEF668x_Module_Radio_AM ;
+                        }
+                        pSet_DigitalRadio->cmd    = TEF668x_cmd_Set_DigitalRadio ;
+                        pSet_DigitalRadio->index  = 1 ;
+
+                        // digital radio
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 == 0        // off (default)
+                         || tmp.udata16 == 1        // on
+                        ) {
+                            pSet_DigitalRadio->mode_hi = tmp.hibyte ;
+                            pSet_DigitalRadio->mode_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                            SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                            I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                            , TEF668x_Buf
+                                            , 5
+                                            , Handle_TEF668x_Service
+                                            ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                            ret_state = STATUS_SUCCESS ;
+                        }   // if (tmp.udata16 == 0 || tmp.udata16 == 1)
+                    }   // if (argc == 1)
+                }
+                break ;
+            case TEF668X_API_FM_Set_Deemphasis :
+                {
+                    if (argc == 1) {
+                        PSet_Deemphasis pSet_Deemphasis ;
+
+                        pSet_Deemphasis = (PSet_Deemphasis)TEF668x_Buf ;
+
+                        pSet_Deemphasis->module = TEF668x_Module_Radio_FM ;
+                        pSet_Deemphasis->cmd    = TEF668x_cmd_Set_Deemphasis ;
+                        pSet_Deemphasis->index  = 1 ;
+
+                        // Selection of FM de-emphasis time constant
+                        tmp.udata16 = va_arg(va, int) ;
+                        pSet_Deemphasis->timeconstant_hi = tmp.hibyte ;
+                        pSet_Deemphasis->timeconstant_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                        SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                        I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                        , TEF668x_Buf
+                                        , 5
+                                        , Handle_TEF668x_Service
+                                        ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                        ret_state = STATUS_SUCCESS ;
+                    }   // if (argc == 1)
+                }
+                break ;
+            case TEF668X_API_FM_Set_StereoImprovement :
+                {
+                    if (argc == 1) {
+                        PSet_StereoImprovement  pSet_StereoImprovement ;
+
+                        pSet_StereoImprovement = (PSet_StereoImprovement)TEF668x_Buf ;
+
+                        pSet_StereoImprovement->module = TEF668x_Module_Radio_FM ;
+                        pSet_StereoImprovement->cmd    = TEF668x_cmd_Set_StereoImprovement ;
+                        pSet_StereoImprovement->index  = 1 ;
+
+                        // FM stereo extended weak signal handling
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 == 0    // 0 = stereo high blend (default)
+                         || tmp.udata16 == 1    // 1 = FMSI stereo band blend system
+                         ) {
+                            pSet_StereoImprovement->mode_hi = tmp.hibyte ;
+                            pSet_StereoImprovement->mode_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                            SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                            I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                            , TEF668x_Buf
+                                            , 5
+                                            , Handle_TEF668x_Service
+                                            ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                            ret_state = STATUS_SUCCESS ;
+                        }   // if (tmp.udata16 == 0 || tmp.udata16 == 1)
+                    }   // if (argc == 1)
+                }
+                break ;
+            case TEF668X_API_FM_Set_Highcut_Fix :
+            case TEF668X_API_AM_Set_Highcut_Fix :
+                {
+                    if (argc == 2) {
+                        PSet_Highcut_Fix    pSet_Highcut_Fix ;
+
+                        pSet_Highcut_Fix = (PSet_Highcut_Fix)TEF668x_Buf ;
+
+                        if (cmd == TEF668X_API_FM_Set_Highcut_Fix) {
+                            pSet_Highcut_Fix->module = TEF668x_Module_Radio_FM ;
+                        }   // if (cmd == TEF668X_API_FM_Set_Highcut_Fix)
+                        else {
+                            pSet_Highcut_Fix->module = TEF668x_Module_Radio_AM ;
+                        }   // if (cmd == TEF668X_API_AM_Set_Highcut_Fix)
+
+                        pSet_Highcut_Fix->cmd    = TEF668x_cmd_Set_Highcut_Fix ;
+                        pSet_Highcut_Fix->index  = 1 ;
+
+                        // independent audio low-pass filter
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 == 0    // 0 = off; high audio frequency bandwidth is not limited (default)
+                         || tmp.udata16 == 1    // 1 = on; high audio frequencies are attenuated by 1 st  order ‘IIR’ low-pass
+                         ) {
+                            pSet_Highcut_Fix->mode_hi = tmp.hibyte ;
+                            pSet_Highcut_Fix->mode_lo = tmp.lobyte ;
+
+                            // fixed highcut attenuation
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 >= 1000     // 1.0 … 15 kHz  -3 dB att. for fixed highcut filter
+                             && tmp.udata16 <= 15000
+                             ) {
+                                pSet_Highcut_Fix->limit_hi = tmp.hibyte ;
+                                pSet_Highcut_Fix->limit_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                , TEF668x_Buf
+                                                , 7
+                                                , Handle_TEF668x_Service
+                                                ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                ret_state = STATUS_SUCCESS ;
+                            }   // tmp.udata16 >= 1000 && tmp.udata16 <= 15000)
+                        }   // if (tmp.udata16 == 0 || tmp.udata16 == 1)
+                    }   // if (argc == 2)
+                }
+                break ;
+            case TEF668X_API_FM_Set_Lowcut_Fix :
+            case TEF668X_API_AM_Set_Lowcut_Fix :
+                {
+                    if (argc == 2) {
+                        PSet_Lowcut_Fix     pSet_Lowcut_Fix ;
+
+                        pSet_Lowcut_Fix = (PSet_Lowcut_Fix)TEF668x_Buf ;
+
+                        if (cmd == TEF668X_API_FM_Set_Lowcut_Fix) {
+                            pSet_Lowcut_Fix->module = TEF668x_Module_Radio_FM ;
+                        }   // if (cmd == TEF668X_API_FM_Set_Lowcut_Fix)
+                        else {
+                            pSet_Lowcut_Fix->module = TEF668x_Module_Radio_AM ;
+                        }   // if (cmd == TEF668X_API_AM_Set_Lowcut_Fix)
+
+                        pSet_Lowcut_Fix->cmd    = TEF668x_cmd_Set_Lowcut_Fix ;
+                        pSet_Lowcut_Fix->index  = 1 ;
+
+                        // independent audio high-pass filter
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 == 0    // 0 = off; low audio frequency bandwidth is not limited (default)
+                         || tmp.udata16 == 1    // 1 = on; low audio frequencies are attenuated by 1st order ‘IIR’ high-pass
+                         ) {
+                            pSet_Lowcut_Fix->mode_hi = tmp.hibyte ;
+                            pSet_Lowcut_Fix->mode_lo = tmp.lobyte ;
+
+                            // fixed lowcut attenuation
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 >= 20     //  20 … 200 Hz  -3 dB attenuation for fixed lowcut filter
+                             && tmp.udata16 <= 200
+                             ) {
+                                pSet_Lowcut_Fix->limit_hi = tmp.hibyte ;
+                                pSet_Lowcut_Fix->limit_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                , TEF668x_Buf
+                                                , 7
+                                                , Handle_TEF668x_Service
+                                                ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                ret_state = STATUS_SUCCESS ;
+                            }   // tmp.udata16 >= 20 && tmp.udata16 <= 200)
+                        }   // if (tmp.udata16 == 0 || tmp.udata16 == 1)
+                    }   // if (argc == 2)
+                }
+                break ;
+            case TEF668X_API_FM_Set_LevelStep :
+            case TEF668X_API_AM_Set_LevelStep :
+                {
+                    if (argc == 7) {
+                        PSet_LevelStep     pSet_LevelStep ;
+
+                        pSet_LevelStep = (PSet_LevelStep)TEF668x_Buf ;
+
+                        if (cmd == TEF668X_API_FM_Set_LevelStep) {
+                            pSet_LevelStep->module = TEF668x_Module_Radio_FM ;
+                        }   // if (cmd == TEF668X_API_FM_Set_LevelStep)
+                        else {
+                            pSet_LevelStep->module = TEF668x_Module_Radio_AM ;
+                        }   // if (cmd == TEF668X_API_AM_Set_LevelStep)
+
+                        pSet_LevelStep->cmd    = TEF668x_cmd_Set_LevelStep ;
+                        pSet_LevelStep->index  = 1 ;
+
+                        // step1: level offset for an AGC step from 0 to 1
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.data16 >= -60   // -60 … 0 (*0.1 dB) = -6 … 0 dB
+                         && tmp.data16 <= 0
+                         ) {
+                            pSet_LevelStep->step1_hi = tmp.hibyte ;
+                            pSet_LevelStep->step1_lo = tmp.lobyte ;
+
+                            // step2: level offset for an AGC step from 1 to 2
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.data16 >= -60   // -60 … 0 (*0.1 dB) = -6 … 0 dB
+                             && tmp.data16 <= 0
+                             ) {
+                                pSet_LevelStep->step2_hi = tmp.hibyte ;
+                                pSet_LevelStep->step2_lo = tmp.lobyte ;
+
+                                // step3: level offset for an AGC step from 2 to 3
+                                tmp.udata16 = va_arg(va, int) ;
+                                if (tmp.data16 >= -60   // -60 … 0 (*0.1 dB) = -6 … 0 dB
+                                 && tmp.data16 <= 0
+                                 ) {
+                                    pSet_LevelStep->step3_hi = tmp.hibyte ;
+                                    pSet_LevelStep->step3_lo = tmp.lobyte ;
+
+                                    // step4: level offset for an AGC step from 3 to 4
+                                    tmp.udata16 = va_arg(va, int) ;
+                                    if (tmp.data16 >= -60   // -60 … 0 (*0.1 dB) = -6 … 0 dB
+                                     && tmp.data16 <= 0
+                                     ) {
+                                        pSet_LevelStep->step4_hi = tmp.hibyte ;
+                                        pSet_LevelStep->step4_lo = tmp.lobyte ;
+
+                                        // step5: level offset for an AGC step from 4 to 5
+                                        tmp.udata16 = va_arg(va, int) ;
+                                        if (tmp.data16 >= -60   // -60 … 0 (*0.1 dB) = -6 … 0 dB
+                                         && tmp.data16 <= 0
+                                         ) {
+                                            pSet_LevelStep->step5_hi = tmp.hibyte ;
+                                            pSet_LevelStep->step5_lo = tmp.lobyte ;
+
+                                            // step6: level offset for an AGC step from 5 to 6
+                                            tmp.udata16 = va_arg(va, int) ;
+                                            if (tmp.data16 >= -60   // -60 … 0 (*0.1 dB) = -6 … 0 dB
+                                             && tmp.data16 <= 0
+                                             ) {
+                                                pSet_LevelStep->step6_hi = tmp.hibyte ;
+                                                pSet_LevelStep->step6_lo = tmp.lobyte ;
+
+                                                // step7: level offset for an AGC step from 5 to 6
+                                                tmp.udata16 = va_arg(va, int) ;
+                                                if (tmp.data16 >= -60   // -60 … 0 (*0.1 dB) = -6 … 0 dB
+                                                 && tmp.data16 <= 0
+                                                 ) {
+                                                    pSet_LevelStep->step7_hi = tmp.hibyte ;
+                                                    pSet_LevelStep->step7_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                                    SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                                    I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                                    , TEF668x_Buf
+                                                                    , 17
+                                                                    , Handle_TEF668x_Service
+                                                                    ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                                    ret_state = STATUS_SUCCESS ;
+                                                }   // if (tmp.data16 >= -60 && tmp.data16 <= 0)
+                                            }   // if (tmp.data16 >= -60 && tmp.data16 <= 0)
+                                        }   // if (tmp.data16 >= -60 && tmp.data16 <= 0)
+                                    }   // if (tmp.data16 >= -60 && tmp.data16 <= 0)
+                                }   // if (tmp.data16 >= -60 && tmp.data16 <= 0)
+                            }   // if (tmp.data16 >= -60 && tmp.data16 <= 0)
+                        }   // if (tmp.data16 >= -60 && tmp.data16 <= 0)
+                    }   // if (argc == 7)
+                }
+                break ;
+            case TEF668X_API_FM_Set_LevelOffset :
+            case TEF668X_API_AM_Set_LevelOffset :
+                {
+                    if (argc == 1) {
+                        PSet_LevelOffset    pSet_LevelOffset ;
+
+                        pSet_LevelOffset = (PSet_LevelOffset)TEF668x_Buf ;
+
+                        if (cmd == TEF668X_API_FM_Set_LevelOffset) {
+                            pSet_LevelOffset->module = TEF668x_Module_Radio_FM ;
+                        }   // if (cmd == TEF668X_API_FM_Set_Highcut_Fix)
+                        else {
+                            pSet_LevelOffset->module = TEF668x_Module_Radio_AM ;
+                        }   // if (cmd == TEF668X_API_AM_Set_LevelOffset)
+
+                        pSet_LevelOffset->cmd    = TEF668x_cmd_Set_LevelOffset ;
+                        pSet_LevelOffset->index  = 1 ;
+
+                        // level offset
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.data16 >= -480  //-480 … +150 (*0.1 dB) = -48 … +15 dB
+                         && tmp.data16 <= 150
+                         ) {
+                            pSet_LevelOffset->offset_hi = tmp.hibyte ;
+                            pSet_LevelOffset->offset_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                            SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                            I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                            , TEF668x_Buf
+                                            , 5
+                                            , Handle_TEF668x_Service
+                                            ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                            ret_state = STATUS_SUCCESS ;
+                        }   // tmp.data16 >= -480 && tmp.data16 <= 150)
+                    }   // if (argc == 1)
+                }
+                break ;
+            case TEF668X_API_FM_Set_Softmute_Time :
+            case TEF668X_API_AM_Set_Softmute_Time :
+                {
+                    if (argc == 4) {
+                        PSet_Softmute   pSet_Softmute ;
+
+                        pSet_Softmute = (PSet_Softmute)TEF668x_Buf ;
+
+                        if (cmd == TEF668X_API_FM_Set_Softmute_Time) {
+                            pSet_Softmute->module = TEF668x_Module_Radio_FM ;
+                        }   // if (cmd == TEF668X_API_FM_Set_Softmute_Time)
+                        else {
+                            pSet_Softmute->module = TEF668x_Module_Radio_AM ;
+                        }   // if (cmd == TEF668X_API_AM_Set_Softmute_Time)
+
+                        pSet_Softmute->cmd    = TEF668x_cmd_Set_Softmute_Time ;
+                        pSet_Softmute->index  = 1 ;
+
+                        // slow_attack : slow attack time of weak signal handling
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 >= 60   // 60 … 2000 (ms) = 60 ms … 2s slow attack time
+                         && tmp.udata16 <= 2000
+                         ) {
+                            pSet_Softmute->slow_attack_hi = tmp.hibyte ;
+                            pSet_Softmute->slow_attack_lo = tmp.lobyte ;
+
+                            // slow_decay : slow decay time of weak signal handling
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 >= 120  // 120 … 12500 (ms) = 120 ms … 12.5 s slow decay time
+                             && tmp.udata16 <= 12500
+                             ) {
+                                pSet_Softmute->slow_decay_hi = tmp.hibyte ;
+                                pSet_Softmute->slow_decay_lo = tmp.lobyte ;
+
+                                // fast_attack : fast attack time of weak signal handling
+                                tmp.udata16 = va_arg(va, int) ;
+                                if (tmp.udata16 >= 10   // 10 … 1200 (*0.1 ms) = 1 ms … 120 ms fast attack time
+                                 && tmp.udata16 <= 1200
+                                 ) {
+                                    pSet_Softmute->fast_attack_hi = tmp.hibyte ;
+                                    pSet_Softmute->fast_attack_lo = tmp.lobyte ;
+
+                                    // fast_decay : fast decay time of weak signal handling
+                                    tmp.udata16 = va_arg(va, int) ;
+                                    if (tmp.udata16 >= 20   // 20 … 5000 ( *0.1 ms) = 2 ms … 500 ms fast decay time
+                                     && tmp.udata16 <= 5000
+                                     ) {
+                                        pSet_Softmute->fast_decay_hi = tmp.hibyte ;
+                                        pSet_Softmute->fast_decay_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                        SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                        I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                        , TEF668x_Buf
+                                                        , 11
+                                                        , Handle_TEF668x_Service
+                                                        ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                        ret_state = STATUS_SUCCESS ;
+                                    }   // if (tmp.udata16 >= 20 && tmp.udata16 <= 5000)
+                                }   // if (tmp.udata16 >= 10 && tmp.udata16 <= 1200)
+                            }   // if (tmp.udata16 >= 120 && tmp.udata16 <= 12500)
+                        }   // if (tmp.udata16 >= 60 && tmp.udata16 <= 2000)
+                    }   // if (argc == 4)
+                }
+                break ;
+            case TEF668X_API_FM_Set_Softmute_Level :
+            case TEF668X_API_AM_Set_Softmute_Level :
+                {
+                    if (argc == 3) {
+                        PSet_Softmute_Level pSet_Softmute_Level ;
+
+                        pSet_Softmute_Level = (PSet_Softmute_Level)TEF668x_Buf ;
+
+                        if (cmd == TEF668X_API_FM_Set_Softmute_Level) {
+                            pSet_Softmute_Level->module = TEF668x_Module_Radio_FM ;
+                        }   // if (cmd == TEF668X_API_FM_Set_Softmute_Level)
+                        else {
+                            pSet_Softmute_Level->module = TEF668x_Module_Radio_AM ;
+                        }   // if (cmd == TEF668X_API_aM_Set_Softmute_Level)
+
+                        pSet_Softmute_Level->cmd    = TEF668x_cmd_Set_Softmute_Level ;
+                        pSet_Softmute_Level->index  = 1 ;
+
+                        // mode : timer selection
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 >= 0    // 0 = off (only for evaluation)
+                         && tmp.udata16 <= 3    // 1 = fast timer control
+                                                // 2 = slow timer control (default)
+                                                // 3 = dual timer control; combined fast and slow timer control
+                         ) {
+                            pSet_Softmute_Level->mode_hi = tmp.hibyte ;
+                            pSet_Softmute_Level->mode_lo = tmp.lobyte ;
+
+                            // start : weak signal handling level start
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 >= 0    // 0 … 500 [*0.1 dBuV] = control when level falls below 0 dBV … 50 dBuV
+                             && tmp.udata16 <= 500
+                             ) {
+                                pSet_Softmute_Level->start_hi = tmp.hibyte ;
+                                pSet_Softmute_Level->start_lo = tmp.lobyte ;
+
+                                // slope : weak signal handling level range
+                                tmp.udata16 = va_arg(va, int) ;
+                                if (tmp.udata16 >= 60   // 60 … 300 [*0.1 dB] = control over level range of 6 dB … 30 dB
+                                 && tmp.udata16 <= 300
+                                 ) {
+                                    pSet_Softmute_Level->slope_hi = tmp.hibyte ;
+                                    pSet_Softmute_Level->slope_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                    SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                    I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                    , TEF668x_Buf
+                                                    , 9
+                                                    , Handle_TEF668x_Service
+                                                    ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                    ret_state = STATUS_SUCCESS ;
+                                }   // if (tmp.udata16 >= 60 && tmp.udata16 <= 300)
+                            }   // if (tmp.udata16 >= 0 && tmp.udata16 <= 500)
+                        }   // if (tmp.udata16 >= 0 && tmp.udata16 <= 3)
+                    }   // if (argc == 3)
+                }
+                break ;
+            case TEF668X_API_FM_Set_Softmute_Noise :
+                {
+                    if (argc == 5) {
+                        PSet_Softmute_Noise pSet_Softmute_Noise ;
+
+                        pSet_Softmute_Noise = (PSet_Softmute_Noise)TEF668x_Buf ;
+
+                        pSet_Softmute_Noise->module = TEF668x_Module_Radio_FM ;
+                        pSet_Softmute_Noise->cmd    = TEF668x_cmd_Set_Softmute_Noise ;
+                        pSet_Softmute_Noise->index  = 1 ;
+
+                        // mode : timer selection
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 >= 0    // 0 = off (default)
+                         && tmp.udata16 <= 3    // 1 = fast timer control
+                                                // 2 = slow timer control
+                                                // 3 = dual timer control; combined fast and slow timer control
+                         ) {
+                            pSet_Softmute_Noise->mode_hi = tmp.hibyte ;
+                            pSet_Softmute_Noise->mode_lo = tmp.lobyte ;
+
+                            // start : FM weak signal handling noise start
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 >= 0    // 0 … 800 [*0.1 %] = control when noise above 0… 80% of USN detector
+                             && tmp.udata16 <= 800
+                             ) {
+                                pSet_Softmute_Noise->start_hi = tmp.hibyte ;
+                                pSet_Softmute_Noise->start_lo = tmp.lobyte ;
+
+                                // slope : FM weak signal handling noise range
+                                tmp.udata16 = va_arg(va, int) ;
+                                if (tmp.udata16 >= 100  // 100 … 1000 [*0.1 %] = control over range of 10… 100% of USN detector
+                                 && tmp.udata16 <= 1000
+                                 ) {
+                                    pSet_Softmute_Noise->slope_hi = tmp.hibyte ;
+                                    pSet_Softmute_Noise->slope_lo = tmp.lobyte ;
+
+                                    // limit_mode : FM softmute on noise dynamic attenuation limit mode
+                                    tmp.udata16 = va_arg(va, int) ;
+                                    if (tmp.udata16 == 0    // 0 = generic limit set by FM cmd 45 Set_Softmute_Max (default)
+                                     || tmp.udata16 == 1    // 1 = independent limit set by parameter 5
+                                     ) {
+                                        pSet_Softmute_Noise->limit_mode_hi = tmp.hibyte ;
+                                        pSet_Softmute_Noise->limit_mode_lo = tmp.lobyte ;
+
+                                        // limit : FM softmute on noise dynamic attenuation limi
+                                        tmp.udata16 = va_arg(va, int) ;
+                                        if (tmp.udata16 >= 0    // 0 …. 400 [*0.1 dB] = 0 … 40 dB softmute maximum attenuation
+                                         && tmp.udata16 <= 400
+                                         ) {
+                                            pSet_Softmute_Noise->limit_hi = tmp.hibyte ;
+                                            pSet_Softmute_Noise->limit_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                            SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                            I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                            , TEF668x_Buf
+                                                            , 13
+                                                            , Handle_TEF668x_Service
+                                                            ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                            ret_state = STATUS_SUCCESS ;
+                                        }   // if (tmp.udata16 >= 0 && tmp.udata16 <= 400)
+                                    }   // if (tmp.udata16 == 0 || tmp.udata16 == 1)
+                                }   // if (tmp.udata16 >= 100 && tmp.udata16 <= 1000)
+                            }   // if (tmp.udata16 >= 0 && tmp.udata16 <= 800)
+                        }   // if (tmp.udata16 >= 0 && tmp.udata16 <= 3)
+                    }   // if (argc == 5)
+                }
+                break ;
+            case TEF668X_API_FM_Set_Softmute_Mph :
+                {
+                    if (argc == 5) {
+                        PSet_Softmute_Mph   pSet_Softmute_Mph ;
+
+                        pSet_Softmute_Mph = (PSet_Softmute_Mph)TEF668x_Buf ;
+
+                        pSet_Softmute_Mph->module = TEF668x_Module_Radio_FM ;
+                        pSet_Softmute_Mph->cmd    = TEF668x_cmd_Set_Softmute_Mph ;
+                        pSet_Softmute_Mph->index  = 1 ;
+
+                        // mode : timer selection
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 >= 0    // 0 = off (default)
+                         && tmp.udata16 <= 3    // 1 = fast timer control
+                                                // 2 = slow timer control
+                                                // 3 = dual timer control; combined fast and slow timer control
+                         ) {
+                            pSet_Softmute_Mph->mode_hi = tmp.hibyte ;
+                            pSet_Softmute_Mph->mode_lo = tmp.lobyte ;
+
+                            // start : FM weak signal handling multipath start
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 >= 0    // 0 … 800 [*0.1 %] = control when mph above 0… 80% of WAM detector
+                             && tmp.udata16 <= 800
+                             ) {
+                                pSet_Softmute_Mph->start_hi = tmp.hibyte ;
+                                pSet_Softmute_Mph->start_lo = tmp.lobyte ;
+
+                                // slope : FM weak signal handling multipath range
+                                tmp.udata16 = va_arg(va, int) ;
+                                if (tmp.udata16 >= 100  // 100 … 1000 [*0.1 %] = control over range of 10… 100% of WAM detector
+                                 && tmp.udata16 <= 1000
+                                 ) {
+                                    pSet_Softmute_Mph->slope_hi = tmp.hibyte ;
+                                    pSet_Softmute_Mph->slope_lo = tmp.lobyte ;
+
+                                    // limit_mode : FM softmute on multipath dynamic attenuation limit mode
+                                    tmp.udata16 = va_arg(va, int) ;
+                                    if (tmp.udata16 == 0    // 0 = generic limit set by FM cmd 45 Set_Softmute_Max (default)
+                                     || tmp.udata16 == 1    // 1 = independent limit set by parameter 5
+                                     ) {
+                                        pSet_Softmute_Mph->limit_mode_hi = tmp.hibyte ;
+                                        pSet_Softmute_Mph->limit_mode_lo = tmp.lobyte ;
+
+                                        // limit : FM softmute on multipath dynamic attenuation limit
+                                        tmp.udata16 = va_arg(va, int) ;
+                                        if (tmp.udata16 >= 0    // 0 …. 400 [*0.1 dB] = 0 … 40 dB softmute maximum attenuation
+                                         && tmp.udata16 <= 400
+                                         ) {
+                                            pSet_Softmute_Mph->limit_hi = tmp.hibyte ;
+                                            pSet_Softmute_Mph->limit_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                            SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                            I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                            , TEF668x_Buf
+                                                            , 13
+                                                            , Handle_TEF668x_Service
+                                                            ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                            ret_state = STATUS_SUCCESS ;
+                                        }   // if (tmp.udata16 >= 0 && tmp.udata16 <= 400)
+                                    }   // if (tmp.udata16 == 0 || tmp.udata16 == 1)
+                                }   // if (tmp.udata16 >= 100 && tmp.udata16 <= 1000)
+                            }   // if (tmp.udata16 >= 0 && tmp.udata16 <= 800)
+                        }   // if (tmp.udata16 >= 0 && tmp.udata16 <= 3)
+                    }   // if (argc == 5)
+                }
+                break ;
+            case TEF668X_API_FM_Set_Softmute_Max :
+            case TEF668X_API_AM_Set_Softmute_Max :
+                {
+                    if (argc == 2) {
+                        PSet_Softmute_Max   pSet_Softmute_Max ;
+
+                        pSet_Softmute_Max = (PSet_Softmute_Max)TEF668x_Buf ;
+
+                        if (cmd == TEF668X_API_FM_Set_Softmute_Max) {
+                            pSet_Softmute_Max->module = TEF668x_Module_Radio_FM ;
+                        }   // if (cmd == TEF668X_API_FM_Set_Softmute_Max)
+                        else {
+                            pSet_Softmute_Max->module = TEF668x_Module_Radio_AM ;
+                        }   // if (cmd == TEF668X_API_AM_Set_Softmute_Max)
+
+                        pSet_Softmute_Max->cmd    = TEF668x_cmd_Set_Softmute_Max ;
+                        pSet_Softmute_Max->index  = 1 ;
+
+                        // mode : weak signal handling (dynamic control)
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 == 0    // 0 = off (for evaluation only)
+                         || tmp.udata16 == 1    // 1 = on; maximum dynamic control defined by limit parameter (default)
+                         ) {
+                            pSet_Softmute_Max->mode_hi = tmp.hibyte ;
+                            pSet_Softmute_Max->mode_lo = tmp.lobyte ;
+
+                            // limit : softmute dynamic attenuation limit
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 >= 0    // 0 … 400 [*0.1 dB] = 0 … 40 dB  softmute maximum attenuation
+                             && tmp.udata16 <= 400
+                             ) {
+                                pSet_Softmute_Max->limit_hi = tmp.hibyte ;
+                                pSet_Softmute_Max->limit_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                , TEF668x_Buf
+                                                , 7
+                                                , Handle_TEF668x_Service
+                                                ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                ret_state = STATUS_SUCCESS ;
+                            }   // if (tmp.udata16 >= 0 && tmp.udata16 <= 400)
+                        }   // if (tmp.udata16 == 0 || tmp.udata16 == 1)
+                    }   // if (argc == 2)
+                }
+                break ;
+            case TEF668X_API_FM_Set_Highcut_Time :
+            case TEF668X_API_AM_Set_Highcut_Time :
+                {
+                    if (argc == 4) {
+                        PSet_Highcut_Time   pSet_Highcut_Time ;
+
+                        pSet_Highcut_Time = (PSet_Highcut_Time)TEF668x_Buf ;
+
+                        if (cmd == TEF668X_API_FM_Set_Highcut_Time) {
+                            pSet_Highcut_Time->module = TEF668x_Module_Radio_FM ;
+                        }   // if (cmd == TEF668X_API_FM_Set_Highcut_Time)
+                        else {
+                            pSet_Highcut_Time->module = TEF668x_Module_Radio_AM ;
+                        }   // if (cmd == TEF668X_API_AM_Set_Highcut_Time)
+                        pSet_Highcut_Time->cmd   = TEF668x_cmd_Set_Highcut_Time ;
+                        pSet_Highcut_Time->index = 1 ;
+
+                        // slow_attack : slow attack time of weak signal handling
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 >= 60    // 60 … 2000 (ms) = 60 ms … 2 s slow attack time
+                         && tmp.udata16 <= 2000
+                         ) {
+                            pSet_Highcut_Time->slow_attack_hi = tmp.hibyte ;
+                            pSet_Highcut_Time->slow_attack_lo = tmp.lobyte ;
+
+                            // slow_decay : slow decay time of weak signal handling
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 >= 120      // 120 … 12500 (ms) = 120 ms … 12.5 s slow decay time
+                             && tmp.udata16 <= 12500
+                             ) {
+                                pSet_Highcut_Time->slow_decay_hi = tmp.hibyte ;
+                                pSet_Highcut_Time->slow_decay_lo = tmp.lobyte ;
+
+                                // fast_attack : fast attack time of weak signal handling
+                                tmp.udata16 = va_arg(va, int) ;
+                                if (tmp.udata16 >= 10       // 10 … 1200 (*0.1 ms) = 1 ms … 120 ms fast attack time
+                                 && tmp.udata16 <= 1200
+                                 ) {
+                                    pSet_Highcut_Time->fast_attack_hi = tmp.hibyte ;
+                                    pSet_Highcut_Time->fast_attack_lo = tmp.lobyte ;
+
+                                    // fast_decay : fast decay time of weak signal handling
+                                    tmp.udata16 = va_arg(va, int) ;
+                                    if (tmp.udata16 >= 20       // 20 … 5000 ( *0.1 ms) = 2 ms … 500 ms fast decay time
+                                     && tmp.udata16 <= 5000
+                                     ) {
+                                        pSet_Highcut_Time->fast_attack_hi = tmp.hibyte ;
+                                        pSet_Highcut_Time->fast_attack_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                        SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                        I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                        , TEF668x_Buf
+                                                        , 11
+                                                        , Handle_TEF668x_Service
+                                                        ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                        ret_state = STATUS_SUCCESS ;
+                                    }   // if (tmp.udata16 >= 20 && tmp.udata16 <= 5000)
+                                }   // if (tmp.udata16 >= 10 && tmp.udata16 <= 1200)
+                            }   // if (tmp.udata16 >= 120 && tmp.udata16 <= 12500)
+                        }   // if (tmp.udata16 >= 60 && tmp.udata16 <= 2000)
+                    }   // if (argc == 4)
+                }
+                break ;
+            case TEF668X_API_FM_Set_Highcut_Mod :
+            case TEF668X_API_AM_Set_Highcut_Mod :
+                {
+                    if (argc == 4) {
+                        PSet_Highcut_Mod    pSet_Highcut_Mod ;
+
+                        pSet_Highcut_Mod = (PSet_Highcut_Mod)TEF668x_Buf ;
+
+                        if (cmd == TEF668X_API_FM_Set_Highcut_Mod) {
+                            pSet_Highcut_Mod->module = TEF668x_Module_Radio_FM ;
+                        }   // if (cmd == TEF668X_API_FM_Set_Highcut_Mod)
+                        else {
+                            pSet_Highcut_Mod->module = TEF668x_Module_Radio_AM ;
+                        }   // if (cmd == TEF668X_API_AM_Set_Highcut_Mod)
+                        pSet_Highcut_Mod->cmd   = TEF668x_cmd_Set_Highcut_Mod ;
+                        pSet_Highcut_Mod->index = 1 ;
+
+                        // mode : modulation dependent weak signal handling
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 == 0    // 0 = off (default)
+                         || tmp.udata16 == 1    // 1 = on (independent modulation timer)
+                         ) {
+                            pSet_Highcut_Mod->mode_hi = tmp.hibyte ;
+                            pSet_Highcut_Mod->mode_lo = tmp.lobyte ;
+
+                            // start : weak signal handling modulation start
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 >= 100      // 100 … 1000 [*0.1 %] = control when modulation falls below 10% … 100%
+                             && tmp.udata16 <= 1000
+                             ) {
+                                pSet_Highcut_Mod->start_hi = tmp.hibyte ;
+                                pSet_Highcut_Mod->start_lo = tmp.lobyte ;
+
+                                // slope : weak signal handling modulation range
+                                tmp.udata16 = va_arg(va, int) ;
+                                if (tmp.udata16 >= 30       // 30 … 1000 (*0.1 %) = control over modulation range of 3% … 100%
+                                 && tmp.udata16 <= 1000
+                                 ) {
+                                    pSet_Highcut_Mod->slope_hi = tmp.hibyte ;
+                                    pSet_Highcut_Mod->slope_lo = tmp.lobyte ;
+
+                                    // shift : weak signal handling control shift
+                                    tmp.udata16 = va_arg(va, int) ;
+                                    if (tmp.udata16 >= 50       // 50 … 1000 (*0.1 %) = maximum weak signal control shift of 5% … 100%
+                                     && tmp.udata16 <= 1000
+                                     ) {
+                                        pSet_Highcut_Mod->shift_hi = tmp.hibyte ;
+                                        pSet_Highcut_Mod->shift_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                        SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                        I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                        , TEF668x_Buf
+                                                        , 11
+                                                        , Handle_TEF668x_Service
+                                                        ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                        ret_state = STATUS_SUCCESS ;
+                                    }   // if (tmp.udata16 >= 50 && tmp.udata16 <= 1000)
+                                }   // if (tmp.udata16 >= 30 && tmp.udata16 <= 1000)
+                            }   // if (tmp.udata16 >= 100 && tmp.udata16 <= 1000)
+                        }   // if (tmp.udata16 == 0 || tmp.udata16 == 1)
+                    }   // if (argc == 4)
+                }
+                break ;
+            case TEF668X_API_FM_Set_Highcut_Level :
+            case TEF668X_API_AM_Set_Highcut_Level :
+                {
+                    if (argc == 3) {
+                        PSet_Highcut_Level  pSet_Highcut_Level ;
+
+                        pSet_Highcut_Level = (PSet_Highcut_Level)TEF668x_Buf ;
+
+                        if (cmd == TEF668X_API_FM_Set_Highcut_Level) {
+                            pSet_Highcut_Level->module = TEF668x_Module_Radio_FM ;
+                        }   // if (cmd == TEF668X_API_FM_Set_Highcut_Level)
+                        else {
+                            pSet_Highcut_Level->module = TEF668x_Module_Radio_AM ;
+                        }   // if (cmd == TEF668X_API_AM_Set_Highcut_Level)
+                        pSet_Highcut_Level->cmd   = TEF668x_cmd_Set_Highcut_Level ;
+                        pSet_Highcut_Level->index = 1 ;
+
+                        // mode : timer selection
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 >= 0    // 0 = off (only for evaluation)
+                         && tmp.udata16 <= 3    // 1 = fast timer control
+                                                // 2 = slow timer control (AM default)
+                                                // 3 = dual timer control; combined fast and slow timer control (FM default)
+                         ) {
+                            pSet_Highcut_Level->mode_hi = tmp.hibyte ;
+                            pSet_Highcut_Level->mode_lo = tmp.lobyte ;
+
+                            // start : weak signal handling level start
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 >= 200      // 200 … 600 [*0.1 dBuV] = control when level is below 20 dBV … 60 dBuV
+                             && tmp.udata16 <= 600
+                             ) {
+                                pSet_Highcut_Level->start_hi = tmp.hibyte ;
+                                pSet_Highcut_Level->start_lo = tmp.lobyte ;
+
+                                // slope : weak signal handling level range
+                                tmp.udata16 = va_arg(va, int) ;
+                                if (tmp.udata16 >= 60       // 60 … 300 [*0.1 dB] = control over level range of 6 dB … 30 dB
+                                 && tmp.udata16 <= 300
+                                 ) {
+                                    pSet_Highcut_Level->slope_hi = tmp.hibyte ;
+                                    pSet_Highcut_Level->slope_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                    SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                    I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                    , TEF668x_Buf
+                                                    , 9
+                                                    , Handle_TEF668x_Service
+                                                    ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                    ret_state = STATUS_SUCCESS ;
+                                 }   // if (tmp.udata16 >= 60 && tmp.udata16 <= 300)
+                            }   // if (tmp.udata16 >= 200 && tmp.udata16 <= 600)
+                        }   // if (tmp.udata16 >= 0 && tmp.udata16 <= 3)
+                    }   // if (argc == 3)
+                }
+                break ;
+            case TEF668X_API_FM_Set_Highcut_Noise :
+            case TEF668X_API_AM_Set_Highcut_Noise :
+                {
+                    if (argc == 3) {
+                        PSet_Highcut_Noise  pSet_Highcut_Noise ;
+
+                        pSet_Highcut_Noise = (PSet_Highcut_Noise)TEF668x_Buf ;
+
+                        if (cmd == TEF668X_API_FM_Set_Highcut_Noise) {
+                            pSet_Highcut_Noise->module = TEF668x_Module_Radio_FM ;
+                        }   // if (cmd == TEF668X_API_FM_Set_Highcut_Noise)
+                        else {
+                            pSet_Highcut_Noise->module = TEF668x_Module_Radio_AM ;
+                        }   // if (cmd == TEF668X_API_AM_Set_Highcut_Noise)
+                        pSet_Highcut_Noise->cmd   = TEF668x_cmd_Set_Highcut_Noise ;
+                        pSet_Highcut_Noise->index = 1 ;
+
+                        // mode : timer selection
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 >= 0    // 0 = off (AM:default)
+                         && tmp.udata16 <= 3    // 1 = fast timer control
+                                                // 2 = slow timer control (FM:default)
+                                                // 3 = dual timer control; combined fast and slow timer control
+                         ) {
+                            pSet_Highcut_Noise->mode_hi = tmp.hibyte ;
+                            pSet_Highcut_Noise->mode_lo = tmp.lobyte ;
+
+                            if (cmd == TEF668X_API_FM_Set_Highcut_Noise) {
+                                // start : FM weak signal handling noise start
+                                tmp.udata16 = va_arg(va, int) ;
+                                if (tmp.udata16 >= 0        // 0 … 800 [*0.1 %] = control when noise above 0… 80% of USN detector
+                                 && tmp.udata16 <= 800
+                                 ) {
+                                    pSet_Highcut_Noise->start_hi = tmp.hibyte ;
+                                    pSet_Highcut_Noise->start_lo = tmp.lobyte ;
+
+                                    // slope : FM weak signal handling noise range
+                                    tmp.udata16 = va_arg(va, int) ;
+                                    if (tmp.udata16 >= 100      // 100 … 1000 [*0.1 %] = control over range of 10… 100% of USN detector
+                                     && tmp.udata16 <= 1000
+                                     ) {
+                                        pSet_Highcut_Noise->slope_hi = tmp.hibyte ;
+                                        pSet_Highcut_Noise->slope_lo = tmp.lobyte ;
+                                    }   // if (tmp.udata16 >= 100 && tmp.udata16 <= 1000)
+                                    else {
+                                        break ;
+                                    }
+                                }   // if (tmp.udata16 >= 0 && tmp.udata16 <= 800)
+                                else {
+                                    break ;
+                                }
+                            }
+                            else {
+                                // start : weak signal handling noise start
+                                tmp.udata16 = va_arg(va, int) ;
+                                if (tmp.udata16 >= 30   // 30 … 300 [*0.1 %] = control when noise above 3… 30% of noise detector
+                                 && tmp.udata16 <= 300
+                                 ) {
+                                    pSet_Highcut_Noise->start_hi = tmp.hibyte ;
+                                    pSet_Highcut_Noise->start_lo = tmp.lobyte ;
+
+                                    // slope : trigger sensitivity
+                                    tmp.udata16 = va_arg(va, int) ;
+                                    if (tmp.udata16 >= 20      // 20 … 1000 [*0.1 %] = control over range of 2… 100% of noise detector
+                                     && tmp.udata16 <= 1000
+                                     ) {
+                                        pSet_Highcut_Noise->slope_hi = tmp.hibyte ;
+                                        pSet_Highcut_Noise->slope_lo = tmp.lobyte ;
+                                    }   // if (tmp.udata16 >= 20 && tmp.udata16 <= 1000)
+                                    else {
+                                        break ;
+                                    }
+                                }   // if (tmp.udata16 >= 30 && tmp.udata16 <= 300)
+                                else {
+                                    break ;
+                                }
+                            }
+#if (TEF668x_API_DEBUG == 0)
+                            SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                            I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                            , TEF668x_Buf
+                                            , 9
+                                            , Handle_TEF668x_Service
+                                            ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                            ret_state = STATUS_SUCCESS ;
+                        }   // if (tmp.udata16 >= 0 && tmp.udata16 <= 3)
+                    }   // if (argc == 3)
+                }
+                break ;
+            case TEF668X_API_FM_Set_Highcut_Mph :
+                {
+                    if (argc == 3) {
+                        PSet_Highcut_Mph    pSet_Highcut_Mph ;
+
+                        pSet_Highcut_Mph = (PSet_Highcut_Mph)TEF668x_Buf ;
+
+                        pSet_Highcut_Mph->module = TEF668x_Module_Radio_FM ;
+                        pSet_Highcut_Mph->cmd    = TEF668x_cmd_Set_Highcut_Mph ;
+                        pSet_Highcut_Mph->index  = 1 ;
+
+                        // mode : timer selection
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 >= 0    // 0 = off (only for evaluation)
+                         && tmp.udata16 <= 3    // 1 = fast timer control
+                                                // 2 = slow timer control (default)
+                                                // 3 = dual timer control; combined fast and slow timer control
+                         ) {
+                            pSet_Highcut_Mph->mode_hi = tmp.hibyte ;
+                            pSet_Highcut_Mph->mode_lo = tmp.lobyte ;
+
+                            // start : FM weak signal handling multipath start
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 >= 0        // 0 … 800 [*0.1 %] = control when mph above 0… 80% of WAM detector
+                             && tmp.udata16 <= 800
+                             ) {
+                                pSet_Highcut_Mph->start_hi = tmp.hibyte ;
+                                pSet_Highcut_Mph->start_lo = tmp.lobyte ;
+
+                                // slope : FM weak signal handling multipath range
+                                tmp.udata16 = va_arg(va, int) ;
+                                if (tmp.udata16 >= 100  // 100 … 1000 [*0.1 %] = control over range of 10… 100% of WAM detector
+                                 && tmp.udata16 <= 1000
+                                 ) {
+                                    pSet_Highcut_Mph->slope_hi = tmp.hibyte ;
+                                    pSet_Highcut_Mph->slope_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                    SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                    I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                    , TEF668x_Buf
+                                                    , 9
+                                                    , Handle_TEF668x_Service
+                                                    ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                    ret_state = STATUS_SUCCESS ;
+                                 }   // if (tmp.udata16 >= 100 && tmp.udata16 <= 1000)
+                            }   // if (tmp.udata16 >= 0 && tmp.udata16 <= 800)
+                        }   // if (tmp.udata16 >= 0 && tmp.udata16 <= 3)
+                    }   // if (argc == 3)
+                }
+                break ;
+            case TEF668X_API_FM_Set_Highcut_Max :
+            case TEF668X_API_AM_Set_Highcut_Max :
+                {
+                    if (argc == 2) {
+                        PSet_Highcut_Max    pSet_Highcut_Max ;
+
+                        pSet_Highcut_Max = (PSet_Highcut_Max)TEF668x_Buf ;
+
+                        if (cmd == TEF668X_API_FM_Set_Highcut_Max) {
+                            pSet_Highcut_Max->module = TEF668x_Module_Radio_FM ;
+                        }   // if (cmd == TEF668X_API_FM_Set_Highcut_Max)
+                        else {
+                            pSet_Highcut_Max->module = TEF668x_Module_Radio_AM ;
+                        }   // if (cmd == TEF668X_API_AM_Set_Highcut_Max)
+                        pSet_Highcut_Max->cmd   = TEF668x_cmd_Set_Highcut_Max ;
+                        pSet_Highcut_Max->index = 1 ;
+
+                        // mode : weak signal handling (dynamic control)
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 == 0    // 0 = off; for evaluation only
+                         || tmp.udata16 == 1    // 1 = on; maximum dynamic control set by limit parameter (default)
+                         ) {
+                            pSet_Highcut_Max->mode_hi = tmp.hibyte ;
+                            pSet_Highcut_Max->mode_lo = tmp.lobyte ;
+
+                            // limit : Highcut attenuation limit
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (cmd == TEF668X_API_FM_Set_Highcut_Max) {
+                                // Highcut corner frequency for maximum -3 dB attenuation
+                                if ((tmp.udata16 >= 1500 && tmp.udata16 <= 7000)    // 1500 … 7000 [*1 Hz] = 1.5 … 7 kHz ‘IIR’ filter (Options ‘1’ (default))
+                                 || (tmp.udata16 >= 700  && tmp.udata16 <= 3000)    //  700 … 3000 [*1 Hz] = 0.7 … 3 kHz ‘de-emphasis’ mode (Options ‘2’)
+                                 || (tmp.udata16 >= 2700 && tmp.udata16 <= 7000)    // 2700 … 7000 [*1 Hz] = 2.7 … 7 kHz ‘FIR’ highcut filter (Options ‘3’)
+                                 ) {
+                                    pSet_Highcut_Max->limit_hi = tmp.hibyte ;
+                                    pSet_Highcut_Max->limit_lo = tmp.lobyte ;
+                                }
+                                else {
+                                    break ;
+                                }
+                            }   // if (cmd == TEF668X_API_FM_Set_Highcut_Max)
+                            else {
+                                if (tmp.udata16 >= 1350
+                                 && tmp.udata16 <= 7000
+                                 ) {
+                                    pSet_Highcut_Max->limit_hi = tmp.hibyte ;
+                                    pSet_Highcut_Max->limit_lo = tmp.lobyte ;
+                                }   // if (tmp.udata16 >= 1350 && tmp.udata16 <= 7000)
+                                else {
+                                    break ;
+                                }
+                            }   // if (cmd == TEF668X_API_AM_Set_Highcut_Max)
+
+#if (TEF668x_API_DEBUG == 0)
+                            SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                            I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                            , TEF668x_Buf
+                                            , 7
+                                            , Handle_TEF668x_Service
+                                            ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                            ret_state = STATUS_SUCCESS ;
+                        }   // if (tmp.udata16 == 0 || tmp.udata16 == 1)
+                     }   // if (argc == 2)
+                }
+                break ;
+            case TEF668X_API_FM_Set_Highcut_Min :
+            case TEF668X_API_AM_Set_Highcut_Min :
+                {
+                    if (argc == 2) {
+                        PSet_Highcut_Min    pSet_Highcut_Min ;
+
+                        pSet_Highcut_Min = (PSet_Highcut_Min)TEF668x_Buf ;
+
+                        if (cmd == TEF668X_API_FM_Set_Highcut_Min) {
+                            pSet_Highcut_Min->module = TEF668x_Module_Radio_FM ;
+                        }   // if (cmd == TEF668X_API_FM_Set_Highcut_Min)
+                        else {
+                            pSet_Highcut_Min->module = TEF668x_Module_Radio_AM ;
+                        }   // if (cmd == TEF668X_API_AM_Set_Highcut_Min)
+                        pSet_Highcut_Min->cmd   = TEF668x_cmd_Set_Highcut_Min ;
+                        pSet_Highcut_Min->index = 1 ;
+
+                        // mode : strong signal handling
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 == 0    // 0 = off; high audio frequency bandwidth is not limited (FM default)
+                         || tmp.udata16 == 1    // 1 =  on; minimum control limit set by limit parameter (AM default)
+                         ) {
+                            pSet_Highcut_Min->mode_hi = tmp.hibyte ;
+                            pSet_Highcut_Min->mode_lo = tmp.lobyte ;
+
+                            // limit : Highcut fixed attenuation limit
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (cmd == TEF668X_API_FM_Set_Highcut_Min) {
+                                // Highcut corner frequency for maximum -3 dB attenuation
+                                if ((tmp.udata16 >= 2700 && tmp.udata16 <= 15000)   // 2700 … 15000 [*1 Hz] = 2.7 … 15 kHz ‘IIR’ filter (Options ‘1’ (default))
+                                                                                    // 2700 … 15000 [*1 Hz] = 2.7 … 15 kHz ‘FIR’ highcut filter (Options ‘3’)
+                                 || (tmp.udata16 >= 1500 && tmp.udata16 <= 3183)    // 1500 … 3183 [*1 Hz] = 1.5 … 3.18 kHz ‘de-emphasis’ (Options ‘2’)
+                                                                                    // 2122 = 75 us de-emphasis / 3183 = 50 us de-emphasis
+                                 ) {
+                                    pSet_Highcut_Min->limit_hi = tmp.hibyte ;
+                                    pSet_Highcut_Min->limit_lo = tmp.lobyte ;
+                                }
+                                else {
+                                    break ;
+                                }
+                            }   // if (cmd == TEF668X_API_FM_Set_Highcut_Min)
+                            else {
+                                if (tmp.udata16 >= 2700     // 2700 … 10000 [*1 Hz] = 2.7 … 10 kHz  -3 dB att. for min. Highcut
+                                 && tmp.udata16 <= 10000
+                                 ) {
+                                    pSet_Highcut_Min->limit_hi = tmp.hibyte ;
+                                    pSet_Highcut_Min->limit_lo = tmp.lobyte ;
+                                }   // if (tmp.udata16 >= 1350 && tmp.udata16 <= 7000)
+                                else {
+                                    break ;
+                                }
+                            }   // if (cmd == TEF668X_API_AM_Set_Highcut_Min)
+#if (TEF668x_API_DEBUG == 0)
+                            SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                            I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                            , TEF668x_Buf
+                                            , 7
+                                            , Handle_TEF668x_Service
+                                            ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                            ret_state = STATUS_SUCCESS ;
+                        }   // if (tmp.udata16 == 0 || tmp.udata16 == 1)
+                    }   // if (argc == 2)
+                }
+                break ;
+            case TEF668X_API_FM_Set_Lowcut_Max :
+            case TEF668X_API_AM_Set_Lowcut_Max :
+                {
+                    if (argc == 2) {
+                        PSet_Lowcut_Max     pSet_Lowcut_Max ;
+
+                        pSet_Lowcut_Max = (PSet_Lowcut_Max)TEF668x_Buf ;
+
+                        if (cmd == TEF668X_API_FM_Set_Lowcut_Max) {
+                            pSet_Lowcut_Max->module = TEF668x_Module_Radio_FM ;
+                        }   // if (cmd == TEF668X_API_FM_Set_Lowcut_Max)
+                        else {
+                            pSet_Lowcut_Max->module = TEF668x_Module_Radio_AM ;
+                        }   // if (cmd == TEF668X_API_AM_Set_Lowcut_Max)
+                        pSet_Lowcut_Max->cmd   = TEF668x_cmd_Set_Lowcut_Max ;
+                        pSet_Lowcut_Max->index = 1 ;
+
+                        // mode : weak signal handling (dynamic control)
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 == 0    // 0 = off
+                         || tmp.udata16 == 1    // 1 = on; maximum dynamic control defined by limit parameter (default)
+                         ) {
+                            pSet_Lowcut_Max->mode_hi = tmp.hibyte ;
+                            pSet_Lowcut_Max->mode_lo = tmp.lobyte ;
+
+                            // limit : Lowcut dynamic attenuation limit
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 >= 30   // 30 … 500 [Hz] = 30 … 500 Hz  -3 dB attenuation for maximum Lowcut
+                             && tmp.udata16 <= 500
+                             ) {
+                                pSet_Lowcut_Max->limit_hi = tmp.hibyte ;
+                                pSet_Lowcut_Max->limit_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                , TEF668x_Buf
+                                                , 7
+                                                , Handle_TEF668x_Service
+                                                ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                ret_state = STATUS_SUCCESS ;
+                            }   // if (tmp.udata16 >= 30 || tmp.udata16 <= 500)
+                        }   // if (tmp.udata16 == 0 || tmp.udata16 == 1)
+                    }   // if (argc == 2)
+                }
+                break ;
+            case TEF668X_API_FM_Set_Lowcut_Min :
+            case TEF668X_API_AM_Set_Lowcut_Min :
+                {
+                    if (argc == 2) {
+                        PSet_Lowcut_Min     pSet_Lowcut_Min ;
+
+                        pSet_Lowcut_Min = (PSet_Lowcut_Min)TEF668x_Buf ;
+
+                        if (cmd == TEF668X_API_FM_Set_Lowcut_Min) {
+                            pSet_Lowcut_Min->module = TEF668x_Module_Radio_FM ;
+                        }   // if (cmd == TEF668X_API_FM_Set_Lowcut_Min)
+                        else {
+                            pSet_Lowcut_Min->module = TEF668x_Module_Radio_AM ;
+                        }   // if (cmd == TEF668X_API_AM_Set_Lowcut_Min)
+                        pSet_Lowcut_Min->cmd   = TEF668x_cmd_Set_Lowcut_Min ;
+                        pSet_Lowcut_Min->index = 1 ;
+
+                        // mode : strong signal handling
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 == 0    // 0 = off; low audio frequency bandwidth is not limited (FM default)
+                         || tmp.udata16 == 1    // 1 = on; minimum control limit set by limit parameter
+                         ) {
+                            pSet_Lowcut_Min->mode_hi = tmp.hibyte ;
+                            pSet_Lowcut_Min->mode_lo = tmp.lobyte ;
+
+                            // limit : Lowcut fixed attenuation limit
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 == 10   // 10 … 200 [Hz] = 10 … 200 Hz  Lowcut minimum -3 dB attenuation
+                             || tmp.udata16 == 200
+                             ) {
+                                pSet_Lowcut_Min->limit_hi = tmp.hibyte ;
+                                pSet_Lowcut_Min->limit_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                , TEF668x_Buf
+                                                , 7
+                                                , Handle_TEF668x_Service
+                                                ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                ret_state = STATUS_SUCCESS ;
+                            }   // if (tmp.udata16 >= 10 && tmp.udata16 <= 200)
+                        }   // if (tmp.udata16 == 0 || tmp.udata16 == 1)
+                    }   // if (argc == 2)
+                }
+                break ;
+            case TEF668X_API_FM_Set_Highcut_Options :
+                {
+                    if (argc == 1) {
+                        PSet_Highcut_Options    pSet_Highcut_Options ;
+
+                        pSet_Highcut_Options = (PSet_Highcut_Options)TEF668x_Buf ;
+
+                        pSet_Highcut_Options->module = TEF668x_Module_Radio_FM ;
+                        pSet_Highcut_Options->cmd   = TEF668x_cmd_Set_Highcut_Options ;
+                        pSet_Highcut_Options->index = 1 ;
+
+                        // mode : strong signal handling
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 == 1    // 1 = IIR; ‘analog’ first order low-pass filter with controlled frequency (default)
+                         || tmp.udata16 == 2    // 2 = de-emphasis; controlled frequency of the 50 / 75 us de-emphasis filter
+                         || tmp.udata16 == 3    // 3 = FIR; ‘digital’ high order low-pass filter with controlled frequency
+                         ) {
+                            pSet_Highcut_Options->mode_hi = tmp.hibyte ;
+                            pSet_Highcut_Options->mode_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                            SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                            I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                            , TEF668x_Buf
+                                            , 5
+                                            , Handle_TEF668x_Service
+                                            ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                            ret_state = STATUS_SUCCESS ;
+                        }   // if (tmp.udata16 == 1 || tmp.udata16 == 2 || tmp.udata16 == 3)
+                    }   // if (argc == 1)
+                }
+                break ;
+            case TEF668X_API_FM_Set_Stereo_Time :
+                {
+                    if (argc == 4) {
+                        PSet_Stereo_Time    pSet_Stereo_Time ;
+
+                        pSet_Stereo_Time = (PSet_Stereo_Time)TEF668x_Buf ;
+
+                        pSet_Stereo_Time->module = TEF668x_Module_Radio_FM ;
+                        pSet_Stereo_Time->cmd    = TEF668x_cmd_Set_Stereo_Time ;
+                        pSet_Stereo_Time->index  = 1 ;
+
+                        // slow_attack : slow attack time of weak signal handling
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 >= 60   // 60 … 2000 (ms) = 60 ms … 2 s slow attack time
+                         && tmp.udata16 <= 2000
+                         ) {
+                            pSet_Stereo_Time->slow_attack_hi = tmp.hibyte ;
+                            pSet_Stereo_Time->slow_attack_lo = tmp.lobyte ;
+
+                            // slow_decay : slow decay time of weak signal handling
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 >= 120      // 120 … 20000 (ms) = 120 ms … 20 s slow decay time
+                             && tmp.udata16 <= 20000
+                             ) {
+                                pSet_Stereo_Time->slow_decay_hi = tmp.hibyte ;
+                                pSet_Stereo_Time->slow_decay_lo = tmp.lobyte ;
+
+                                // fast_attack : fast attack time of weak signal handling
+                                tmp.udata16 = va_arg(va, int) ;
+                                if (tmp.udata16 >= 10   // 10 … 1200 (*0.1 ms) = 1 ms … 120 ms fast attack time
+                                 && tmp.udata16 <= 1200
+                                 ) {
+                                    pSet_Stereo_Time->fast_attack_hi = tmp.hibyte ;
+                                    pSet_Stereo_Time->fast_attack_lo = tmp.lobyte ;
+
+                                    // fast_decay : fast decay time of weak signal handling
+                                    tmp.udata16 = va_arg(va, int) ;
+                                    if (tmp.udata16 >= 20       // 20 … 5000 ( *0.1 ms) = 2 ms … 500 ms fast decay time
+                                     && tmp.udata16 <= 5000
+                                     ) {
+                                        pSet_Stereo_Time->fast_decay_hi = tmp.hibyte ;
+                                        pSet_Stereo_Time->fast_decay_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                        SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                        I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                        , TEF668x_Buf
+                                                        , 11
+                                                        , Handle_TEF668x_Service
+                                                        ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                        ret_state = STATUS_SUCCESS ;
+                                    }   // if (tmp.udata16 >= 20 && tmp.udata16 <= 5000 )
+                                }   // if (tmp.udata16 >= 10 && tmp.udata16 <= 1200 )
+                            }   // if (tmp.udata16 >= 120 && tmp.udata16 <= 20000 )
+                        }   // if (tmp.udata16 >= 60 && tmp.udata16 <= 2000 )
+                    }   // if (argc == 4)
+                }
+                break ;
+            case TEF668X_API_FM_Set_Stereo_Mod :
+                {
+                    if (argc == 4) {
+                        PSet_Stereo_Mod     pSet_Stereo_Mod ;
+
+
+                        pSet_Stereo_Mod = (PSet_Stereo_Mod)TEF668x_Buf ;
+
+                        pSet_Stereo_Mod->module = TEF668x_Module_Radio_FM ;
+                        pSet_Stereo_Mod->cmd    = TEF668x_cmd_Set_Stereo_Mod ;
+                        pSet_Stereo_Mod->index  = 1 ;
+
+                        // mode : modulation dependent weak signal handling
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 == 0    // 0 = off (default)
+                         || tmp.udata16 == 1    // 1 = on (independent modulation timer)
+                         ) {
+                            pSet_Stereo_Mod->mode_hi = tmp.hibyte ;
+                            pSet_Stereo_Mod->mode_lo = tmp.lobyte ;
+
+                            // start : weak signal handling modulation start
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 >= 10       // 100 … 1000 [*0.1 %] = control when modulation falls below 10% … 100%
+                             && tmp.udata16 <= 1000
+                             ) {
+                                pSet_Stereo_Mod->start_hi = tmp.hibyte ;
+                                pSet_Stereo_Mod->start_lo = tmp.lobyte ;
+
+                                // slope : weak signal handling modulation range
+                                tmp.udata16 = va_arg(va, int) ;
+                                if (tmp.udata16 >= 30   // 30 … 1000 (*0.1 %) = control over modulation range of 3% … 100%
+                                 && tmp.udata16 <= 1000
+                                 ) {
+                                    pSet_Stereo_Mod->slope_hi = tmp.hibyte ;
+                                    pSet_Stereo_Mod->slope_lo = tmp.lobyte ;
+
+                                    // shift : weak signal handling control shift
+                                    tmp.udata16 = va_arg(va, int) ;
+                                    if (tmp.udata16 >= 50       // 50 … 1000 (*0.1 %) = maximum weak signal control shift of 5% … 100%
+                                     && tmp.udata16 <= 1000
+                                     ) {
+                                        pSet_Stereo_Mod->shift_hi = tmp.hibyte ;
+                                        pSet_Stereo_Mod->shift_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                        SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                        I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                        , TEF668x_Buf
+                                                        , 11
+                                                        , Handle_TEF668x_Service
+                                                        ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                        ret_state = STATUS_SUCCESS ;
+                                    }   // if (tmp.udata16 >= 50 && tmp.udata16 <= 1000)
+                                }   // if (tmp.udata16 >= 30 && tmp.udata16 <= 1000)
+                            }   // if (tmp.udata16 >= 10 && tmp.udata16 <= 1000)
+                        }   // if (tmp.udata16 == 0 || tmp.udata16 == 1)
+                    }   // if (argc == 4)
+                }
+                break ;
+            case TEF668X_API_FM_Set_Stereo_Level :
+                {
+                    if (argc == 3) {
+                        PSet_Stereo_Level   pSet_Stereo_Level ;
+
+                        pSet_Stereo_Level = (PSet_Stereo_Level)TEF668x_Buf ;
+
+                        pSet_Stereo_Level->module   = TEF668x_Module_Radio_FM ;
+                        pSet_Stereo_Level->cmd      = TEF668x_cmd_Set_Stereo_Level ;
+                        pSet_Stereo_Level->index    = 1 ;
+
+                        // mode : timer selection
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 >= 0    // 0 = off (only for evaluation)
+                         && tmp.udata16 <= 3    // 1 = fast timer control
+                                                // 2 = slow timer control
+                                                // 3 = dual timer control; combined fast and slow timer control (default)
+                         ) {
+                            pSet_Stereo_Level->mode_hi = tmp.hibyte ;
+                            pSet_Stereo_Level->mode_lo = tmp.lobyte ;
+
+                            // start : weak signal handling level start
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 >= 300      // 300 … 600 [*0.1 dBuV] = control when level below 30 dBV … 60 dBuV
+                             && tmp.udata16 <= 600
+                             ) {
+                                pSet_Stereo_Level->start_hi = tmp.hibyte ;
+                                pSet_Stereo_Level->start_lo = tmp.lobyte ;
+
+                                // slope : weak signal handling level range
+                                tmp.udata16 = va_arg(va, int) ;
+                                if (tmp.udata16 >= 60   // 60 … 300 [*0.1 dB] = control over level range of 6 dB … 30 dB
+                                 && tmp.udata16 <= 300
+                                 ) {
+                                    pSet_Stereo_Level->slope_hi = tmp.hibyte ;
+                                    pSet_Stereo_Level->slope_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                    SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                    I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                    , TEF668x_Buf
+                                                    , 9
+                                                    , Handle_TEF668x_Service
+                                                    ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                    ret_state = STATUS_SUCCESS ;
+                                }   // if (tmp.udata16 >= 60 && tmp.udata16 <= 300)
+                            }   // if (tmp.udata16 >= 300 && tmp.udata16 <= 600)
+                        }   // if (tmp.udata16 >= 0 && tmp.udata16 <= 3)
+                    }   // if (argc == 3)
+                }
+                break ;
+            case TEF668X_API_FM_Set_Stereo_Noise :
+                {
+                    if (argc == 3) {
+                        PSet_Stereo_Noise   pSet_Stereo_Noise ;
+
+                        pSet_Stereo_Noise = (PSet_Stereo_Noise)TEF668x_Buf ;
+
+                        pSet_Stereo_Noise->module   = TEF668x_Module_Radio_FM ;
+                        pSet_Stereo_Noise->cmd      = TEF668x_cmd_Set_Stereo_Noise ;
+                        pSet_Stereo_Noise->index    = 1 ;
+
+                        // mode : timer selection
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 >= 0    // 0 = off (only for evaluation)
+                         && tmp.udata16 <= 3    // 1 = fast timer control
+                                                // 2 = slow timer control
+                                                // 3 = dual timer control; combined fast and slow timer control (default)
+                         ) {
+                            pSet_Stereo_Noise->mode_hi = tmp.hibyte ;
+                            pSet_Stereo_Noise->mode_lo = tmp.lobyte ;
+
+                            // start : FM weak signal handling noise start
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 >= 0    // 0 … 800 [*0.1 %] = control when noise above 0… 80% of USN detector
+                             && tmp.udata16 <= 800
+                             ) {
+                                pSet_Stereo_Noise->start_hi = tmp.hibyte ;
+                                pSet_Stereo_Noise->start_lo = tmp.lobyte ;
+
+                                // slope : FM weak signal handling noise range
+                                tmp.udata16 = va_arg(va, int) ;
+                                if (tmp.udata16 >= 100   // 100 … 1000 [*0.1 %] = control over range of 10… 100% of USN detector
+                                 && tmp.udata16 <= 1000
+                                 ) {
+                                    pSet_Stereo_Noise->slope_hi = tmp.hibyte ;
+                                    pSet_Stereo_Noise->slope_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                    SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                    I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                    , TEF668x_Buf
+                                                    , 9
+                                                    , Handle_TEF668x_Service
+                                                    ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                    ret_state = STATUS_SUCCESS ;
+                                }   // if (tmp.udata16 >= 100 && tmp.udata16 <= 1000)
+                            }   // if (tmp.udata16 >= 0 && tmp.udata16 <= 800)
+                        }   // if (tmp.udata16 >= 0 && tmp.udata16 <= 3)
+                    }   // if (argc == 3)
+                }
+                break ;
+            case TEF668X_API_FM_Set_Stereo_Mph :
+                {
+                    if (argc == 3) {
+                        PSet_Stereo_Mph     pSet_Stereo_Mph ;
+
+                        pSet_Stereo_Mph = (PSet_Stereo_Mph)TEF668x_Buf ;
+
+                        pSet_Stereo_Mph->module   = TEF668x_Module_Radio_FM ;
+                        pSet_Stereo_Mph->cmd      = TEF668x_cmd_Set_Stereo_Mph ;
+                        pSet_Stereo_Mph->index    = 1 ;
+
+                        // mode : timer selection
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 >= 0    // 0 = off (only for evaluation)
+                         && tmp.udata16 <= 3    // 1 = fast timer control
+                                                // 2 = slow timer control
+                                                // 3 = dual timer control; combined fast and slow timer control (default)
+                         ) {
+                            pSet_Stereo_Mph->mode_hi = tmp.hibyte ;
+                            pSet_Stereo_Mph->mode_lo = tmp.lobyte ;
+
+                            // start : FM weak signal handling multipath start
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 >= 0    // 0 … 800 [*0.1 %] = control when mph above 0… 80% of WAM detector
+                             && tmp.udata16 <= 800
+                             ) {
+                                pSet_Stereo_Mph->start_hi = tmp.hibyte ;
+                                pSet_Stereo_Mph->start_lo = tmp.lobyte ;
+
+                                // slope : FM weak signal handling multipath range
+                                tmp.udata16 = va_arg(va, int) ;
+                                if (tmp.udata16 >= 100   // 100 … 1000 [*0.1 %] = control over range of 10… 100% of WAM detector
+                                 && tmp.udata16 <= 1000
+                                 ) {
+                                    pSet_Stereo_Mph->slope_hi = tmp.hibyte ;
+                                    pSet_Stereo_Mph->slope_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                    SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                    I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                    , TEF668x_Buf
+                                                    , 9
+                                                    , Handle_TEF668x_Service
+                                                    ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                    ret_state = STATUS_SUCCESS ;
+                                }   // if (tmp.udata16 >= 100 && tmp.udata16 <= 1000)
+                            }   // if (tmp.udata16 >= 0 && tmp.udata16 <= 800)
+                        }   // if (tmp.udata16 >= 0 && tmp.udata16 <= 3)
+                    }   // if (argc == 3)
+                }
+                break ;
+            case TEF668X_API_FM_Set_Stereo_Max :
+                {
+                    if (argc == 1) {
+                        PSet_Stereo_Max     pSet_Stereo_Max ;
+
+                        pSet_Stereo_Max = (PSet_Stereo_Max)TEF668x_Buf ;
+
+                        pSet_Stereo_Max->module = TEF668x_Module_Radio_FM ;
+                        pSet_Stereo_Max->cmd   = TEF668x_cmd_Set_Stereo_Max ;
+                        pSet_Stereo_Max->index = 1 ;
+
+                        // mode : weak signal handling (dynamic control)
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 == 0    // 0 = off (for evaluation only)
+                         || tmp.udata16 == 1    // 1 = on; maximum dynamic control is 0 dB channel sep, i.e. mono (default)
+                         ) {
+                            pSet_Stereo_Max->mode_hi = tmp.hibyte ;
+                            pSet_Stereo_Max->mode_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                            SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                            I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                            , TEF668x_Buf
+                                            , 5
+                                            , Handle_TEF668x_Service
+                                            ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                            ret_state = STATUS_SUCCESS ;
+                        }   // if (tmp.udata16 == 0 || tmp.udata16 == 1)
+                    }   // if (argc == 1)
+                }
+                break ;
+            case TEF668X_API_FM_Set_Stereo_Min :
+                {
+                    if (argc == 2) {
+                        PSet_Stereo_Min     pSet_Stereo_Min ;
+
+                        pSet_Stereo_Min = (PSet_Stereo_Min)TEF668x_Buf ;
+
+                        pSet_Stereo_Min->module = TEF668x_Module_Radio_FM ;
+                        pSet_Stereo_Min->cmd    = TEF668x_cmd_Set_Stereo_Min ;
+                        pSet_Stereo_Min->index  = 1 ;
+
+                        // mode : strong signal handling
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 == 0    // 0 = off; channel separation is not limited (default)
+                         || tmp.udata16 == 1    // 1 = on; minimum control limit set by limit parameter
+                         || tmp.udata16 == 2    // 2 = forced mono
+                         ) {
+                            pSet_Stereo_Min->mode_hi = tmp.hibyte ;
+                            pSet_Stereo_Min->mode_lo = tmp.lobyte ;
+
+                            // limit : Stereo fixed attenuation limit
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 == 60   // 60 …  400 [0.1* dB] = 6 … 40 dB  Stereo minimum channel separation
+                             || tmp.udata16 == 400
+                             ) {
+                                pSet_Stereo_Min->limit_hi = tmp.hibyte ;
+                                pSet_Stereo_Min->limit_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                , TEF668x_Buf
+                                                , 7
+                                                , Handle_TEF668x_Service
+                                                ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                ret_state = STATUS_SUCCESS ;
+                            }   // if (tmp.udata16 >= 60 && tmp.udata16 <= 400)
+                        }   // if (tmp.udata16 == 0 || tmp.udata16 == 1 || tmp.udata16 == 2)
+                    }   // if (argc == 2)
+                }
+                break ;
+            case TEF668X_API_FM_Set_StHiBlend_Time :
+                {
+                    if (argc == 4) {
+                        PSet_StHiBlend_Time pSet_StHiBlend_Time ;
+
+                        pSet_StHiBlend_Time = (PSet_StHiBlend_Time)TEF668x_Buf ;
+
+                        pSet_StHiBlend_Time->module = TEF668x_Module_Radio_FM ;
+                        pSet_StHiBlend_Time->cmd    = TEF668x_cmd_Set_StHiBlend_Time ;
+                        pSet_StHiBlend_Time->index  = 1 ;
+
+                        // slow_attack : slow attack time of weak signal handling
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 >= 60   // 60 … 2000 (ms) = 60 ms … 2 s slow attack time
+                         && tmp.udata16 <= 2000
+                         ) {
+                            pSet_StHiBlend_Time->slow_attack_hi = tmp.hibyte ;
+                            pSet_StHiBlend_Time->slow_attack_lo = tmp.lobyte ;
+
+                            // slow_decay : slow decay time of weak signal handling
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 >= 120  // 120 … 12500 (ms) = 120 ms … 12.5 s slow decay time
+                             && tmp.udata16 <= 12500
+                             ) {
+                                pSet_StHiBlend_Time->slow_decay_hi = tmp.hibyte ;
+                                pSet_StHiBlend_Time->slow_decay_lo = tmp.lobyte ;
+
+                                // fast_attack : fast attack time of weak signal handling
+                                tmp.udata16 = va_arg(va, int) ;
+                                if (tmp.udata16 >= 10   // 10 … 1200 (*0.1 ms) = 1 ms … 120 ms fast attack time
+                                 && tmp.udata16 <= 1200
+                                 ) {
+                                    pSet_StHiBlend_Time->fast_attack_hi = tmp.hibyte ;
+                                    pSet_StHiBlend_Time->fast_attack_lo = tmp.lobyte ;
+
+                                    // fast_decay : fast decay time of weak signal handling
+                                    tmp.udata16 = va_arg(va, int) ;
+                                    if (tmp.udata16 >= 20   // 20 … 5000 ( *0.1 ms) = 2 ms … 500 ms fast decay time
+                                     && tmp.udata16 <= 5000
+                                     ) {
+                                        pSet_StHiBlend_Time->fast_decay_hi = tmp.hibyte ;
+                                        pSet_StHiBlend_Time->fast_decay_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                        SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                        I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                        , TEF668x_Buf
+                                                        , 11
+                                                        , Handle_TEF668x_Service
+                                                        ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                        ret_state = STATUS_SUCCESS ;
+                                    }   // if (tmp.udata16 >= 20 && tmp.udata16 <= 5000)
+                                }   // if (tmp.udata16 >= 10 && tmp.udata16 <= 1200)
+                            }   // if (tmp.udata16 >= 120 && tmp.udata16 <= 12500)
+                        }   // if (tmp.udata16 >= 60 && tmp.udata16 <= 2000)
+                    }   // if (argc == 4)
+                }
+                break ;
+            case TEF668X_API_FM_Set_StHiBlend_Mod :
+                {
+                    if (argc == 4) {
+                        PSet_StHiBlend_Mod  pSet_StHiBlend_Mod ;
+
+                        pSet_StHiBlend_Mod = (PSet_StHiBlend_Mod)TEF668x_Buf ;
+
+                        pSet_StHiBlend_Mod->module = TEF668x_Module_Radio_FM ;
+                        pSet_StHiBlend_Mod->cmd    = TEF668x_cmd_Set_StHiBlend_Mod ;
+                        pSet_StHiBlend_Mod->index  = 1 ;
+
+                        // mode : modulation dependent weak signal handling
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 == 0    // 0 = off (default)
+                         || tmp.udata16 == 1    // 1 = on (independent modulation timer)
+                         ) {
+                            pSet_StHiBlend_Mod->mode_hi = tmp.hibyte ;
+                            pSet_StHiBlend_Mod->mode_lo = tmp.lobyte ;
+
+                            // start : weak signal handling modulation start
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 >= 10       // 100 … 1000 [*0.1 %] = control when modulation falls below 10% … 100%
+                             && tmp.udata16 <= 1000
+                             ) {
+                                pSet_StHiBlend_Mod->start_hi = tmp.hibyte ;
+                                pSet_StHiBlend_Mod->start_lo = tmp.lobyte ;
+
+                                // slope : weak signal handling modulation range
+                                tmp.udata16 = va_arg(va, int) ;
+                                if (tmp.udata16 >= 30   // 30 … 1000 (*0.1 %) = control over modulation range of 3% … 100%
+                                 && tmp.udata16 <= 1000
+                                 ) {
+                                    pSet_StHiBlend_Mod->slope_hi = tmp.hibyte ;
+                                    pSet_StHiBlend_Mod->slope_lo = tmp.lobyte ;
+
+                                    // shift : weak signal handling control shift
+                                    tmp.udata16 = va_arg(va, int) ;
+                                    if (tmp.udata16 >= 50       // 50 … 1000 (*0.1 %) = maximum weak signal control shift of 5% … 100%
+                                     && tmp.udata16 <= 1000
+                                     ) {
+                                        pSet_StHiBlend_Mod->shift_hi = tmp.hibyte ;
+                                        pSet_StHiBlend_Mod->shift_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                        SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                        I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                        , TEF668x_Buf
+                                                        , 11
+                                                        , Handle_TEF668x_Service
+                                                        ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                        ret_state = STATUS_SUCCESS ;
+                                    }   // if (tmp.udata16 >= 50 && tmp.udata16 <= 1000)
+                                }   // if (tmp.udata16 >= 30 && tmp.udata16 <= 1000)
+                            }   // if (tmp.udata16 >= 10 && tmp.udata16 <= 1000)
+                        }   // if (tmp.udata16 == 0 || tmp.udata16 == 1)
+                    }   // if (argc == 4)
+                }
+                break ;
+            case TEF668X_API_FM_Set_StHiBlend_Level :
+                {
+                    if (argc == 3) {
+                        PSet_StHiBlend_Level    pSet_StHiBlend_Level ;
+
+                        pSet_StHiBlend_Level = (PSet_StHiBlend_Level)TEF668x_Buf ;
+
+                        pSet_StHiBlend_Level->module   = TEF668x_Module_Radio_FM ;
+                        pSet_StHiBlend_Level->cmd      = TEF668x_cmd_Set_StHiBlend_Level ;
+                        pSet_StHiBlend_Level->index    = 1 ;
+
+                        // mode : timer selection
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 >= 0    // 0 = off (only for evaluation)
+                         && tmp.udata16 <= 3    // 1 = fast timer control
+                                                // 2 = slow timer control
+                                                // 3 = dual timer control; combined fast and slow timer control (default)
+                         ) {
+                            pSet_StHiBlend_Level->mode_hi = tmp.hibyte ;
+                            pSet_StHiBlend_Level->mode_lo = tmp.lobyte ;
+
+                            // start : weak signal handling level start
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 >= 300  // 300 … 660 [*0.1 dBuV] = control when level below 30 dBV … 66 dBuV
+                             && tmp.udata16 <= 660
+                             ) {
+                                pSet_StHiBlend_Level->start_hi = tmp.hibyte ;
+                                pSet_StHiBlend_Level->start_lo = tmp.lobyte ;
+
+                                // slope : weak signal handling level range
+                                tmp.udata16 = va_arg(va, int) ;
+                                if (tmp.udata16 >= 60   // 60 … 300 [*0.1 dB] = control over level range of 6 dB … 30 dB
+                                 && tmp.udata16 <= 300
+                                 ) {
+                                    pSet_StHiBlend_Level->slope_hi = tmp.hibyte ;
+                                    pSet_StHiBlend_Level->slope_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                    SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                    I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                    , TEF668x_Buf
+                                                    , 9
+                                                    , Handle_TEF668x_Service
+                                                    ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                    ret_state = STATUS_SUCCESS ;
+                                }   // if (tmp.udata16 >= 60 && tmp.udata16 <= 300)
+                            }   // if (tmp.udata16 >= 300 && tmp.udata16 <= 660)
+                        }   // if (tmp.udata16 >= 0 && tmp.udata16 <= 3)
+                    }   // if (argc == 3)
+                }
+                break ;
+            case TEF668X_API_FM_Set_StHiBlend_Noise :
+                {
+                    if (argc == 3) {
+                        PSet_StHiBlend_Noise    pSet_StHiBlend_Noise ;
+
+                        pSet_StHiBlend_Noise = (PSet_StHiBlend_Noise)TEF668x_Buf ;
+
+                        pSet_StHiBlend_Noise->module   = TEF668x_Module_Radio_FM ;
+                        pSet_StHiBlend_Noise->cmd      = TEF668x_cmd_Set_StHiBlend_Noise ;
+                        pSet_StHiBlend_Noise->index    = 1 ;
+
+                        // mode : timer selection
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 >= 0    // 0 = off (only for evaluation)
+                         && tmp.udata16 <= 3    // 1 = fast timer control
+                                                // 2 = slow timer control
+                                                // 3 = dual timer control; combined fast and slow timer control (default)
+                         ) {
+                            pSet_StHiBlend_Noise->mode_hi = tmp.hibyte ;
+                            pSet_StHiBlend_Noise->mode_lo = tmp.lobyte ;
+
+                            // start : FM weak signal handling noise start
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 >= 0    // 0 … 800 [*0.1 %] = control when noise above 0… 80% of USN detector
+                             && tmp.udata16 <= 800
+                             ) {
+                                pSet_StHiBlend_Noise->start_hi = tmp.hibyte ;
+                                pSet_StHiBlend_Noise->start_lo = tmp.lobyte ;
+
+                                // slope : FM weak signal handling noise range
+                                tmp.udata16 = va_arg(va, int) ;
+                                if (tmp.udata16 >= 100  // 100 … 1000 [*0.1 %] = control over range of 10… 100% of USN detector
+                                 && tmp.udata16 <= 1000
+                                 ) {
+                                    pSet_StHiBlend_Noise->slope_hi = tmp.hibyte ;
+                                    pSet_StHiBlend_Noise->slope_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                    SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                    I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                    , TEF668x_Buf
+                                                    , 9
+                                                    , Handle_TEF668x_Service
+                                                    ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                    ret_state = STATUS_SUCCESS ;
+                                }   // if (tmp.udata16 >= 100 && tmp.udata16 <= 1000)
+                            }   // if (tmp.udata16 >= 0 && tmp.udata16 <= 800)
+                        }   // if (tmp.udata16 >= 0 && tmp.udata16 <= 3)
+                    }   // if (argc == 3)
+                }
+                break ;
+            case TEF668X_API_FM_Set_StHiBlend_Mph :
+                {
+                    if (argc == 3) {
+                        PSet_StHiBlend_Mph  pSet_StHiBlend_Mph ;
+
+                        pSet_StHiBlend_Mph = (PSet_StHiBlend_Mph)TEF668x_Buf ;
+
+                        pSet_StHiBlend_Mph->module   = TEF668x_Module_Radio_FM ;
+                        pSet_StHiBlend_Mph->cmd      = TEF668x_cmd_Set_StHiBlend_Mph ;
+                        pSet_StHiBlend_Mph->index    = 1 ;
+
+                        // mode : timer selection
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 >= 0    // 0 = off (only for evaluation)
+                         && tmp.udata16 <= 3    // 1 = fast timer control
+                                                // 2 = slow timer control
+                                                // 3 = dual timer control; combined fast and slow timer control (default)
+                         ) {
+                            pSet_StHiBlend_Mph->mode_hi = tmp.hibyte ;
+                            pSet_StHiBlend_Mph->mode_lo = tmp.lobyte ;
+
+                            // start : FM weak signal handling multipath start
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 >= 0    // 0 … 800 [*0.1 %] = control when mph above 0… 80% of WAM detector
+                             && tmp.udata16 <= 800
+                             ) {
+                                pSet_StHiBlend_Mph->start_hi = tmp.hibyte ;
+                                pSet_StHiBlend_Mph->start_lo = tmp.lobyte ;
+
+                                // slope : FM weak signal handling multipath range
+                                tmp.udata16 = va_arg(va, int) ;
+                                if (tmp.udata16 >= 100  // 100 … 1000 [*0.1 %] = control over range of 10… 100% of WAM detector
+                                 && tmp.udata16 <= 1000
+                                 ) {
+                                    pSet_StHiBlend_Mph->slope_hi = tmp.hibyte ;
+                                    pSet_StHiBlend_Mph->slope_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                    SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                    I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                    , TEF668x_Buf
+                                                    , 9
+                                                    , Handle_TEF668x_Service
+                                                    ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                    ret_state = STATUS_SUCCESS ;
+                                }   // if (tmp.udata16 >= 60 && tmp.udata16 <= 300)
+                            }   // if (tmp.udata16 >= 0 && tmp.udata16 <= 800)
+                        }   // if (tmp.udata16 >= 0 && tmp.udata16 <= 3)
+                    }   // if (argc == 3)
+                }
+                break ;
+            case TEF668X_API_FM_Set_StHiBlend_Max :
+                {
+                    if (argc == 2) {
+                        PSet_StHiBlend_Max  pSet_StHiBlend_Max ;
+
+                        pSet_StHiBlend_Max = (PSet_StHiBlend_Max)TEF668x_Buf ;
+
+                        pSet_StHiBlend_Max->module = TEF668x_Module_Radio_FM ;
+                        pSet_StHiBlend_Max->cmd   = TEF668x_cmd_Set_StHiBlend_Max ;
+                        pSet_StHiBlend_Max->index = 1 ;
+
+                        // mode : weak signal handling (dynamic control)
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 == 0    // 0 = off;
+                         || tmp.udata16 == 1    // 1 = on; maximum dynamic control defined by limit parameter (default)
+                         ) {
+                            pSet_StHiBlend_Max->mode_hi = tmp.hibyte ;
+                            pSet_StHiBlend_Max->mode_lo = tmp.lobyte ;
+
+                            // limit : StHiBlend dynamic attenuation limit
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 >= 2700     // 2700 …  7000 [Hz] = 2.7 kHz … 7 kHz StHiBlend max. reduction
+                             && tmp.udata16 <= 7000     // of channel separation bandwidth
+                             ) {
+                                pSet_StHiBlend_Max->limit_hi = tmp.hibyte ;
+                                pSet_StHiBlend_Max->limit_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                , TEF668x_Buf
+                                                , 7
+                                                , Handle_TEF668x_Service
+                                                ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                ret_state = STATUS_SUCCESS ;
+                            }   // if (tmp.udata16 >= 2700 && tmp.udata16 <= 7000)
+                        }   // if (tmp.udata16 == 0 || tmp.udata16 == 1)
+                    }   // if (argc == 2)
+                }
+                break ;
+            case TEF668X_API_FM_Set_StHiBlend_Min :
+                {
+                    if (argc == 2) {
+                        PSet_StHiBlend_Min  pSet_StHiBlend_Min ;
+
+                        pSet_StHiBlend_Min = (PSet_StHiBlend_Min)TEF668x_Buf ;
+
+                        pSet_StHiBlend_Min->module = TEF668x_Module_Radio_FM ;
+                        pSet_StHiBlend_Min->cmd   = TEF668x_cmd_Set_StHiBlend_Min ;
+                        pSet_StHiBlend_Min->index = 1 ;
+
+                        // mode : strong signal handling
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 == 0    // 0 = off; channel separation bw is not limited (default)
+                         || tmp.udata16 == 1    // 1 = on; minimum control limit set by limit parameter
+                         ) {
+                            pSet_StHiBlend_Min->mode_hi = tmp.hibyte ;
+                            pSet_StHiBlend_Min->mode_lo = tmp.lobyte ;
+
+                            // limit : StHiBlend fixed attenuation limit
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 >= 3000     // 3000 …  15000 [Hz] = 3 kHz … 15 kHz StHiBlend min. reduction of
+                             && tmp.udata16 <= 15000    // channel separation bandwidth
+                             ) {
+                                pSet_StHiBlend_Min->limit_hi = tmp.hibyte ;
+                                pSet_StHiBlend_Min->limit_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                , TEF668x_Buf
+                                                , 7
+                                                , Handle_TEF668x_Service
+                                                ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                ret_state = STATUS_SUCCESS ;
+                            }   // if (tmp.udata16 >= 3000 && tmp.udata16 <= 15000)
+                        }   // if (tmp.udata16 == 0 || tmp.udata16 == 1)
+                    }   // if (argc == 2)
+                }
+                break ;
+            case TEF668X_API_FM_Set_Scaler :
+            case TEF668X_API_AM_Set_Scaler :
+                {
+                    if (argc == 1) {
+                        PSet_Scaler pSet_Scaler ;
+
+                        pSet_Scaler = (PSet_Scaler)TEF668x_Buf ;
+
+                        if (cmd == TEF668X_API_FM_Set_Scaler) {
+                            pSet_Scaler->module = TEF668x_Module_Radio_FM ;
+                        }   // if (cmd == TEF668X_API_FM_Set_Scaler)
+                        else {
+                            pSet_Scaler->module = TEF668x_Module_Radio_AM ;
+                        }   // if (cmd == TEF668X_API_AM_Set_Scaler)
+                        pSet_Scaler->cmd    = TEF668x_cmd_Set_Scaler ;
+                        pSet_Scaler->index  = 1 ;
+
+                        // FM multiple path suppression
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.data16 >= -120  // -120 … +60 [*0.1 dB] = -12 … +6 dB  analog radio signal gain
+                         && tmp.data16 <= 60
+                         ) {
+                            pSet_Scaler->gain_hi = tmp.hibyte ;
+                            pSet_Scaler->gain_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                            SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                            I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                            , TEF668x_Buf
+                                            , 5
+                                            , Handle_TEF668x_Service
+                                            ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                            ret_state = STATUS_SUCCESS ;
+                        }   // if (tmp.data16 >= -120 && tmp.data16 <= 60)
+                    }   // if (argc == 1)
+                }
+                break ;
+            case TEF668X_API_FM_Set_RDS :
+                {
+                    if (argc == 3) {
+                        PSet_RDS    pSet_RDS ;
+
+                        pSet_RDS = (PSet_RDS)TEF668x_Buf ;
+
+                        pSet_RDS->module   = TEF668x_Module_Radio_FM ;
+                        pSet_RDS->cmd      = TEF668x_cmd_Set_RDS ;
+                        pSet_RDS->index    = 1 ;
+
+                        // mode : RDS operation control
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 >= 0    // 0 = off (RDS function disabled)
+                         && tmp.udata16 <= 3    // 1 = decoder mode (default); output of RDS group data (block A, B, C, D)
+                                                //     from Get_RDS_Status/Get_RDS_Data; FM cmd = 130/131
+                                                // 2 = demodulator mode; output of raw demodulator data from
+                                                //     Get_RDS_Status/Get_RDS_Data; FM cmd = 130/131
+                                                // 3 = ‘FULL SEARCH’ decoder mode; extended sensitivity RDS reception
+                                                //     (for TEF6687A and TEF6689A only)
+                                                //     standard mode = 1 compatible output of RDS group data (block A, B, C, D)
+                                                //     from Get_RDS_Status/Get_RDS_Data; FM cmd = 130/131
+                         ) {
+                            pSet_RDS->mode_hi = tmp.hibyte ;
+                            pSet_RDS->mode_lo = tmp.lobyte ;
+
+                            // restart : RDS decoder restart
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 >= 0    // 0 = no control
+                             && tmp.udata16 <= 3    // 1 = manual restart; start looking for new RDS signal immediately
+                                                    // 2 = automatic restart after tuning (default); start looking for new RDS signal
+                                                    //     after Preset, Search, Jump or Check tuning action (see FM cmd = 1)
+                                                    // 3 = flush; empty RDS output buffer (but maintain RDS synchronization)
+                             ) {
+                                pSet_RDS->restart_hi = tmp.hibyte ;
+                                pSet_RDS->restart_lo = tmp.lobyte ;
+
+                                // interface : RDS pin signal functionality
+                                tmp.udata16 = va_arg(va, int) ;
+                                if (tmp.udata16 == 0    // 0 = no pin interface (default)
+                                 || tmp.udata16 == 2    // 2 = data-available status output; active low  (GPIO feature ‘DAVN’)
+                                 || tmp.udata16 == 4    // 4 = legacy 2-wire demodulator data and clock output (‘RDDA’ and ‘RDCL’)
+                                 ) {
+                                    pSet_RDS->interface_hi = tmp.hibyte ;
+                                    pSet_RDS->interface_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                    SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                    I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                    , TEF668x_Buf
+                                                    , 9
+                                                    , Handle_TEF668x_Service
+                                                    ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                    ret_state = STATUS_SUCCESS ;
+                                }   // if (tmp.udata16 == 0 || tmp.udata16 == 2 || tmp.udata16 == 4)
+                            }   // if (tmp.udata16 >= 0 && tmp.udata16 <= 3)
+                        }   // if (tmp.udata16 >= 0 && tmp.udata16 <= 3)
+                    }   // if (argc == 3)
+                }
+                break ;
+            case TEF668X_API_FM_Set_QualityStatus :
+            case TEF668X_API_AM_Set_QualityStatus :
+                {
+                    if (argc == 2) {
+                        PSet_QualityStatus  pSet_QualityStatus ;
+
+                        pSet_QualityStatus = (PSet_QualityStatus)TEF668x_Buf ;
+
+                        if (cmd == TEF668X_API_FM_Set_QualityStatus) {
+                            pSet_QualityStatus->module = TEF668x_Module_Radio_FM ;
+                        }   // if (cmd == TEF668X_API_FM_Set_QualityStatus)
+                        else {
+                            pSet_QualityStatus->module = TEF668x_Module_Radio_AM ;
+                        }   // if (cmd == TEF668X_API_AM_Set_QualityStatus)
+
+                        pSet_QualityStatus->cmd   = TEF668x_cmd_Set_QualityStatus ;
+                        pSet_QualityStatus->index = 1 ;
+
+                        // mode : quality status flag after tuning ready
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (cmd == TEF668X_API_FM_Set_QualityStatus) {
+                            uint16_t            tmp1 ;
+
+                            //        0 = no flag set after tuning (default)
+                            //        [ 8:0 ] : 10 … 320 (* 0.1 ms) = set flag at 1 … 32 ms after tuning ready
+                            //        [ 15 ] : 1 = set flag when FM AF_Update quality result is available
+                            tmp1 = tmp.udata16 & ~BIT_15 ;
+                            if (tmp.udata16 & BIT_15) {
+                                if (tmp1 < 10
+                                 || tmp1 > 320
+                                 ) {
+                                    break ;
+                                }   // if (tmp1 < 10 || tmp1 > 320)
+                            }
+                            else if (tmp1 > 0) {
+                                break ;
+                            }   // if (tmp1 > 0)
+                        }   // if (cmd == TEF668X_API_FM_Set_QualityStatus)
+                        else {
+                            // 0 = no flag set after tuning (default)
+                            // [ 8:0 ] : 10 … 320 (* 0.1 ms) = set flag at 1 … 32 ms after tuning ready
+                            if (tmp.udata16 != 0 && (tmp.udata16 < 10 || tmp.udata16 > 320)) {
+                                break ;
+                            }   // if (tmp.udata16 != 0 && (tmp.udata16 < 10 || tmp.udata16 > 320))
+                        }   // if (cmd == TEF668X_API_AM_Set_QualityStatus)
+                        pSet_QualityStatus->mode_hi = tmp.hibyte ;
+                        pSet_QualityStatus->mode_lo = tmp.lobyte ;
+
+                        // interface : quality status pin signal functionality
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 == 0    // 0 = no pin interface (default)
+                         || tmp.udata16 == 2    // 2 = quality status output; active low  (‘QSI’)
+                         ) {
+                            pSet_QualityStatus->interface_hi = tmp.hibyte ;
+                            pSet_QualityStatus->interface_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                            SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                            I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                            , TEF668x_Buf
+                                            , 7
+                                            , Handle_TEF668x_Service
+                                            ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                            ret_state = STATUS_SUCCESS ;
+                        }   // if (tmp.udata16 == 0 || tmp.udata16 == 2)
+                    }   // if (argc == 2)
+                }
+                break ;
+            case TEF668X_API_FM_Set_DR_Blend :
+            case TEF668X_API_AM_Set_DR_Blend :
+                {
+                    if (argc == 4) {
+                        PSet_DR_Blend   pSet_DR_Blend ;
+
+                        pSet_DR_Blend = (PSet_DR_Blend)TEF668x_Buf ;
+
+                        if (cmd == TEF668X_API_FM_Set_DR_Blend) {
+                            pSet_DR_Blend->module = TEF668x_Module_Radio_FM ;
+                        }   // if (cmd == TEF668X_API_FM_Set_DR_Blend)
+                        else {
+                            pSet_DR_Blend->module = TEF668x_Module_Radio_AM ;
+                        }   // if (cmd == TEF668X_API_AM_Set_DR_Blend)
+                        pSet_DR_Blend->cmd   = TEF668x_cmd_Set_DR_Blend ;
+                        pSet_DR_Blend->index = 1 ;
+
+                        // mode : blend pin use (DR_BL input)
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 >= 0    // 0 = Standard pin use : DR Blend pin High = digital radio (default)
+                         && tmp.udata16 <= 3    // 1 = Inverted pin use : DR Blend pin Low = digital radio
+                                                // 2 = No pin use; Force blend to digital radio
+                                                // 3 = No pin use; Force blend to analog radio
+                         ) {
+                            pSet_DR_Blend->mode_hi = tmp.hibyte ;
+                            pSet_DR_Blend->mode_lo = tmp.lobyte ;
+
+                            // in_time : blend time from analog radio to digital radio
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 >= 10   // 10 … 5000 [*0.1 ms] = 1 … 500 ms
+                             && tmp.udata16 <= 5000
+                             ) {
+                                pSet_DR_Blend->in_time_hi = tmp.hibyte ;
+                                pSet_DR_Blend->in_time_lo = tmp.lobyte ;
+
+                                // out_time : blend time from digital radio to analog radio
+                                tmp.udata16 = va_arg(va, int) ;
+                                if (tmp.udata16 >= 10   // 10 … 5000 [*0.1 ms] = 1 … 500 ms
+                                 && tmp.udata16 <= 5000
+                                 ) {
+                                    pSet_DR_Blend->out_time_hi = tmp.hibyte ;
+                                    pSet_DR_Blend->out_time_lo = tmp.lobyte ;
+
+                                    // gain : wdigital radio channel gain
+                                    tmp.udata16 = va_arg(va, int) ;
+                                    if (tmp.data16 >= -180  // -180 … +60 [*0.1 dB] = -18 … +6 dB  digital radio signal gain
+                                     && tmp.data16 <= 60
+                                     ) {
+                                        pSet_DR_Blend->gain_hi = tmp.hibyte ;
+                                        pSet_DR_Blend->gain_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                        SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                        I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                        , TEF668x_Buf
+                                                        , 11
+                                                        , Handle_TEF668x_Service
+                                                        ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                        ret_state = STATUS_SUCCESS ;
+                                    }   // if (tmp.data16 >= -180 && tmp.udata16 <= 60)
+                                }   // if (tmp.udata16 >= 10 && tmp.udata16 <= 5000)
+                            }   // if (tmp.udata16 >= 10 && tmp.udata16 <= 5000)
+                        }   // if (tmp.udata16 >= 0 && tmp.udata16 <= 3)
+                    }   // if (argc == 4)
+                }
+                break ;
+            case TEF668X_API_FM_Set_DR_Options :
+            case TEF668X_API_AM_Set_DR_Options :
+                {
+                    if (argc == 1 || argc == 3) {
+                        PSet_DR_Options pSet_DR_Options ;
+#if (TEF668x_API_DEBUG == 0)
+                        uint8_t         write_len = 0 ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                        pSet_DR_Options = (PSet_DR_Options)TEF668x_Buf ;
+
+                        if (cmd == TEF668X_API_FM_Set_DR_Options) {
+                            pSet_DR_Options->module   = TEF668x_Module_Radio_FM ;
+                        }   // if (cmd == TEF668X_API_FM_Set_DR_Options)
+                        else {
+                            pSet_DR_Options->module   = TEF668x_Module_Radio_AM ;
+                        }   // if (cmd == TEF668X_API_AM_Set_DR_Options)
+                        pSet_DR_Options->cmd      = TEF668x_cmd_Set_DR_Options ;
+                        pSet_DR_Options->index    = 1 ;
+
+                        // samplerate : baseband digital radio sample rate (DR I2S output)
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 == 0    // 0 = automatic frequency selection based on tuning frequency (default)
+                         || tmp.udata16 == 6500 // 6500 = 650 kHz (not for normal application use)
+                         || tmp.udata16 == 6750 // 6750 = 675 kHz (not for normal application use)
+                         ) {
+                            pSet_DR_Options->samplerate_hi = tmp.hibyte ;
+                            pSet_DR_Options->samplerate_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                            write_len = 5 ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+                            if (argc == 3) {
+                                // mode : baseband digital radio pin mode
+                                tmp.udata16 = va_arg(va, int) ;
+                                // [ 15:8 ] = BCK and WS pin mode
+                                //            34 = voltage output (default)
+                                //            51 = current output (‘virtual ground’)  20 * I0
+                                //            187 … 255 = current output level selection:
+                                //              [ 15:12 ] = 11 … 15 = BCK  6 … 31 * I0
+                                //              [ 11:8 ]  = 11 … 15 = WS   6 … 31 * I0
+
+                                if (tmp.hibyte != 34
+                                 && tmp.hibyte != 51
+                                 && tmp.hibyte < 187
+                                 ) {
+                                    break ;
+                                }   // if (tmp.hibyte != 34 && tmp.hibyte != 51 && tmp.hibyte < 187)
+
+                                // [ 7:0 ] = Data pin(s) mode
+                                //            2 = voltage output
+                                //            3 = current output (‘virtual ground’)  20 * I0
+                                //            4 = open drain (‘pull down’) (default)
+                                //            11 … 15 = current output level selection  6 … 31 * I0
+                                if (tmp.lobyte != 2
+                                 && tmp.lobyte != 3
+                                 && tmp.lobyte != 4
+                                 && (tmp.lobyte < 11 || tmp.lobyte > 15)
+                                 ) {
+                                    break ;
+                                }   // if (tmp.lobyte != 2 && tmp.lobyte != 3 && tmp.lobyte != 4 && (tmp.lobyte < 11 || tmp.lobyte > 15))
+                                pSet_DR_Options->mode_hi = tmp.hibyte ;
+                                pSet_DR_Options->mode_lo = tmp.lobyte ;
+
+                                // format : baseband digital radio format select
+                                tmp.udata16 = va_arg(va, int) ;
+                                if (tmp.udata16 == 16   // 16 = I2S 16 bit, ‘3 wire’ interface with single I/Q signal line (DR_I_DATA)
+                                                        //      (fDR_BCK = 32 * sample rate)
+                                 || tmp.udata16 == 4112 // 4112 =  I2S 16 bit, ‘4 wire’ interface with independent I and Q signal lines
+                                                        //      (fDR_BCK = 16 * sample rate) (default)
+                                 ) {
+                                    pSet_DR_Options->format_hi = tmp.hibyte ;
+                                    pSet_DR_Options->format_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                    write_len = 9 ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+                                }   // if (tmp.udata16 == 16 || tmp.udata16 == 4112)
+                                else {
+                                    break ;
+                                }
+                            }   // if (argc == 3)
+#if (TEF668x_API_DEBUG == 0)
+                            SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                            I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                            , TEF668x_Buf
+                                            , write_len
+                                            , Handle_TEF668x_Service
+                                            ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                            ret_state = STATUS_SUCCESS ;
+                        }   // if (tmp.udata16 == 0 || tmp.udata16 == 6500 || tmp.udata16 == 6750)
+                    }   // if (argc == 3)
+                }
+                break ;
+            case TEF668X_API_FM_Set_Specials :
+            case TEF668X_API_AM_Set_Specials :
+                {
+                    if (argc == 1) {
+                        PSet_Specials   pSet_Specials ;
+
+                        pSet_Specials = (PSet_Specials)TEF668x_Buf ;
+
+                        if (cmd == TEF668X_API_FM_Set_Specials) {
+                            pSet_Specials->module = TEF668x_Module_Radio_FM ;
+                        }   // if (cmd == TEF668X_API_FM_Set_Specials)
+                        else {
+                            pSet_Specials->module = TEF668x_Module_Radio_AM ;
+                        }   // if (cmd == TEF668X_API_AM_Set_Specials)
+                        pSet_Specials->cmd    = TEF668x_cmd_Set_Specials ;
+                        pSet_Specials->index  = 1 ;
+
+                        // ana_out : audio output use
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (cmd == TEF668X_API_FM_Set_Specials) {
+                            if (tmp.udata16 > 2     // 0 = normal operation (default)
+                                                    // 1 = DAC_L : FM MPX wideband (DARC) signal / DAC_R : FM mono audio
+                                                    // 2 = L : digital radio left channel / R : analog radio left channel
+                             ) {
+                                break ;
+                            }
+                        }   // if (cmd == TEF668X_API_FM_Set_Specials)
+                        else {
+                            if (tmp.udata16 == 1    // 0 = normal operation (default)
+                             || tmp.udata16 >  2    // 2 = L : digital radio left channel / R : analog radio left channel
+                             ) {
+                                break ;
+                            }
+                        }   // if (cmd == TEF668X_API_AM_Set_Specials)
+                        pSet_Specials->ana_out_hi = tmp.hibyte ;
+                        pSet_Specials->ana_out_lo = tmp.lobyte ;
+#if (TEF668x_API_DEBUG == 0)
+                        SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                        I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                        , TEF668x_Buf
+                                        , 5
+                                        , Handle_TEF668x_Service
+                                        ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                        ret_state = STATUS_SUCCESS ;
+                    }   // if (argc == 1)
+                }
+                break ;
+            case TEF668X_API_FM_Set_Bandwidth_Options :
+                {
+                    if (argc == 1) {
+                        PSet_Bandwidth_Options  pSet_Bandwidth_Options ;
+
+                        pSet_Bandwidth_Options = (PSet_Bandwidth_Options)TEF668x_Buf ;
+
+                        pSet_Bandwidth_Options->module = TEF668x_Module_Radio_FM ;
+                        pSet_Bandwidth_Options->cmd    = TEF668x_cmd_Set_Bandwidth_Options ;
+                        pSet_Bandwidth_Options->index  = 1 ;
+
+                        // modulation : extended API: FM automatic bandwidth boost on modulation
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 >= 660  // 660 … 1330 (*0.1 %) = 66 … 133 % modulation (= 50 … 100 kHz FM dev.)
+                         && tmp.udata16 <= 1330 // Modulation index where bandwidth is boosted to maximum bandwidth.
+                          ) {
+                            pSet_Bandwidth_Options->modulation_hi = tmp.hibyte ;
+                            pSet_Bandwidth_Options->modulation_lo = tmp.lobyte ;
+#if (TEF668x_API_DEBUG == 0)
+                            SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                            I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                            , TEF668x_Buf
+                                            , 5
+                                            , Handle_TEF668x_Service
+                                            ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                            ret_state = STATUS_SUCCESS ;
+                        }   // if (cmd == TEF668X_API_AM_Set_Specials)
+                    }   // if (argc == 1)
+                }
+                break ;
+            case TEF668X_API_FM_Set_StBandBlend_Time :
+                {
+                    if (argc == 2) {
+                        PSet_StBandBlend_Time   pSet_StBandBlend_Time ;
+
+                        pSet_StBandBlend_Time = (PSet_StBandBlend_Time)TEF668x_Buf ;
+
+                        pSet_StBandBlend_Time->module = TEF668x_Module_Radio_FM ;
+                        pSet_StBandBlend_Time->cmd    = TEF668x_cmd_Set_StBandBlend_Time ;
+                        pSet_StBandBlend_Time->index  = 1 ;
+
+                        // attack : attack time of FMSI weak signal handling
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 >= 10   // 10 … 1000 (ms) = 10 ms … 1 s attack time (control time towards mono)
+                         && tmp.udata16 <= 1000
+                         ) {
+                            pSet_StBandBlend_Time->attack_hi = tmp.hibyte ;
+                            pSet_StBandBlend_Time->attack_lo = tmp.lobyte ;
+
+                            // decay : decay time of FMSI weak signal handling
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 >= 10   // 10 … 1000 (ms) = 10 ms … 1 s decay time (control time towards stereo)
+                             && tmp.udata16 <= 1000
+                             ) {
+                                pSet_StBandBlend_Time->decay_hi = tmp.hibyte ;
+                                pSet_StBandBlend_Time->decay_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                , TEF668x_Buf
+                                                , 7
+                                                , Handle_TEF668x_Service
+                                                ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                ret_state = STATUS_SUCCESS ;
+                            }   // if (tmp.udata16 >= 10 && tmp.udata16 <= 1000)
+                        }   // if (tmp.udata16 >= 10 && tmp.udata16 <= 1000)
+                    }   // if (argc == 2)
+                }
+                break ;
+            case TEF668X_API_FM_Set_StBandBlend_Gain :
+                {
+                    if (argc == 4) {
+                        PSet_StBandBlend_Gain   pSet_StBandBlend_Gain ;
+
+                        pSet_StBandBlend_Gain = (PSet_StBandBlend_Gain)TEF668x_Buf ;
+
+                        pSet_StBandBlend_Gain->module = TEF668x_Module_Radio_FM ;
+                        pSet_StBandBlend_Gain->cmd    = TEF668x_cmd_Set_StBandBlend_Gain ;
+                        pSet_StBandBlend_Gain->index  = 1 ;
+
+                        // band1 : control sensitivity for low frequency audio band
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 >= 500  // 500 … 1500 [*0.1 %] = 50% … 150%  weak … strong control to mono
+                         && tmp.udata16 <= 1500
+                         ) {
+                            pSet_StBandBlend_Gain->band1_hi = tmp.hibyte ;
+                            pSet_StBandBlend_Gain->band1_lo = tmp.lobyte ;
+
+                            // band2 :control sensitivity for audio band around 2 kHz
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 >= 500  // 500 … 1500 [*0.1 %] = 50% … 150%  weak … strong control to mono
+                             && tmp.udata16 <= 1500
+                             ) {
+                                pSet_StBandBlend_Gain->band2_hi = tmp.hibyte ;
+                                pSet_StBandBlend_Gain->band2_lo = tmp.lobyte ;
+
+                                // band3 : control sensitivity for audio band around 5 kHz
+                                tmp.udata16 = va_arg(va, int) ;
+                                if (tmp.udata16 >= 500  // 500 … 1500 [*0.1 %] = 50% … 150%  weak … strong control to mono
+                                 && tmp.udata16 <= 1500
+                                 ) {
+                                    pSet_StBandBlend_Gain->band3_hi = tmp.hibyte ;
+                                    pSet_StBandBlend_Gain->band3_lo = tmp.lobyte ;
+
+                                    // band4 : control sensitivity for high frequency audio band
+                                    tmp.udata16 = va_arg(va, int) ;
+                                    if (tmp.udata16 >= 500  // 500 … 1500 [*0.1 %] = 50% … 150%  weak … strong control to mono
+                                     && tmp.udata16 <= 1500
+                                     ) {
+                                        pSet_StBandBlend_Gain->band4_hi = tmp.hibyte ;
+                                        pSet_StBandBlend_Gain->band4_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                        SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                        I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                        , TEF668x_Buf
+                                                        , 11
+                                                        , Handle_TEF668x_Service
+                                                        ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                        ret_state = STATUS_SUCCESS ;
+                                    }   // if (tmp.udata16 >= 500 && tmp.udata16 <= 1500)
+                                }   // if (tmp.udata16 >= 500 && tmp.udata16 <= 1500)
+                            }   // if (tmp.udata16 >= 500 && tmp.udata16 <= 1500)
+                        }   // if (tmp.udata16 >= 500 && tmp.udata16 <= 1500)
+                    }   // if (argc == 4)
+                }
+                break ;
+            case TEF668X_API_FM_Set_StBandBlend_Bias :
+                {
+                    if (argc == 4) {
+                        PSet_StBandBlend_Bias   pSet_StBandBlend_Bias ;
+
+                        pSet_StBandBlend_Bias = (PSet_StBandBlend_Bias)TEF668x_Buf ;
+
+                        pSet_StBandBlend_Bias->module = TEF668x_Module_Radio_FM ;
+                        pSet_StBandBlend_Bias->cmd    = TEF668x_cmd_Set_StBandBlend_Bias ;
+                        pSet_StBandBlend_Bias->index  = 1 ;
+
+                        // band1 : control bias for low frequency audio band
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.data16 >= -250  // -250 … +250 [*0.1 %] = -25% … +25%  stereo … mono bias
+                         && tmp.data16 <= 250
+                         ) {
+                            pSet_StBandBlend_Bias->band1_hi = tmp.hibyte ;
+                            pSet_StBandBlend_Bias->band1_lo = tmp.lobyte ;
+
+                            // band2 : control bias for audio band around 2 kHz
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.data16 >= -250  // -250 … +250 [*0.1 %] = -25% … +25%  stereo … mono bias
+                             && tmp.data16 <= 250
+                             ) {
+                                pSet_StBandBlend_Bias->band2_hi = tmp.hibyte ;
+                                pSet_StBandBlend_Bias->band2_lo = tmp.lobyte ;
+
+                                // band3 : control bias for audio band around 5 kHz
+                                tmp.udata16 = va_arg(va, int) ;
+                                if (tmp.data16 >= -250  // -250 … +250 [*0.1 %] = -25% … +25%  stereo … mono bias
+                                 && tmp.data16 <= 250
+                                 ) {
+                                    pSet_StBandBlend_Bias->band3_hi = tmp.hibyte ;
+                                    pSet_StBandBlend_Bias->band3_lo = tmp.lobyte ;
+
+                                    // band4 : control bias for high frequency audio band
+                                    tmp.udata16 = va_arg(va, int) ;
+                                    if (tmp.data16 >= -250  // -250 … +250 [*0.1 %] = -25% … +25%  stereo … mono bias
+                                     && tmp.data16 <= 250
+                                     ) {
+                                        pSet_StBandBlend_Bias->band4_hi = tmp.hibyte ;
+                                        pSet_StBandBlend_Bias->band4_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                        SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                        I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                        , TEF668x_Buf
+                                                        , 11
+                                                        , Handle_TEF668x_Service
+                                                        ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                        ret_state = STATUS_SUCCESS ;
+                                    }   // if (tmp.data16 >= -250 && tmp.data16 <= 250)
+                                }   // if (tmp.data16 >= -250 && tmp.data16 <= 250)
+                            }   // if (tmp.data16 >= -250 && tmp.data16 <= 250)
+                        }   // if (tmp.data16 >= -250 && tmp.data16 <= 250)
+                    }   // if (argc == 4)
+                }
+                break ;
+            case TEF668X_API_AM_Set_CoChannelDet :
+                {
+                    if (argc == 4) {
+                        PCoChannelDet       pCoChannelDet ;
+
+                        pCoChannelDet = (PCoChannelDet)TEF668x_Buf ;
+
+                        pCoChannelDet->module = TEF668x_Module_Radio_AM ;
+                        pCoChannelDet->cmd    = TEF668x_cmd_Set_CoChannelDet ;
+                        pCoChannelDet->index  = 1 ;
+
+                        // mode : co-channel detector operation
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 == 1    // 1 = on (default)
+                         ) {
+                            pCoChannelDet->mode_hi = tmp.hibyte ;
+                            pCoChannelDet->mode_lo = tmp.lobyte ;
+
+                            // restart : co-channel detector restart
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 == 1    // 1 = manual restart; reset detector result and start looking for co-channel
+                             || tmp.udata16 == 2    // 2 = automatic restart after tuning (default); start looking for new co-channel
+                                                    //     after Preset and Search tuning action (see AM cmd 1 TuneTo)
+                             ) {
+                                pCoChannelDet->restart_hi = tmp.hibyte ;
+                                pCoChannelDet->restart_lo = tmp.lobyte ;
+
+                                // sensitivity : co-channel detection sensitivity
+                                tmp.udata16 = va_arg(va, int) ;
+                                if (tmp.udata16 >= 500  // 500 … 1500 [*0.1 %] = 50 … 150 % relative detection sensitivity
+                                 && tmp.udata16 <= 1500
+                                 ) {
+                                    pCoChannelDet->sensitivity_hi = tmp.hibyte ;
+                                    pCoChannelDet->sensitivity_lo = tmp.lobyte ;
+
+                                    // count : co-channel detection count threshold
+                                    tmp.udata16 = va_arg(va, int) ;
+                                    if (tmp.udata16 >= 1    // 1 … 15 = 1 … 15 detection counts until signaling of co-channel detected
+                                     && tmp.udata16 <= 15
+                                     ) {
+                                        pCoChannelDet->count_hi = tmp.hibyte ;
+                                        pCoChannelDet->count_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                        SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                        I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                        , TEF668x_Buf
+                                                        , 11
+                                                        , Handle_TEF668x_Service
+                                                        ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                        ret_state = STATUS_SUCCESS ;
+                                    }   // if (tmp.udata16 >= 1 && tmp.udata16 <= 15)
+                                }   // if (tmp.udata16 >= 500 && tmp.udata16 <= 1500)
+                            }   // if (tmp.udata16 == 1 || tmp.udata16 == 2)
+                        }   // if (tmp.udata16 == 1)
+                    }   // if (argc == 4)
+                }
+                break ;
+            case TEF668X_API_AM_Set_NoiseBlanker_Audio :
+                {
+                    if (argc == 2 || argc == 3) {
+                        PSet_NoiseBlanker_Audio pSet_NoiseBlanker_Audio ;
+#if (TEF668x_API_DEBUG == 0)
+                        uint8_t                 write_len = 0 ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                        pSet_NoiseBlanker_Audio = (PSet_NoiseBlanker_Audio)TEF668x_Buf ;
+
+                        pSet_NoiseBlanker_Audio->module = TEF668x_Module_Radio_AM ;
+                        pSet_NoiseBlanker_Audio->cmd    = TEF668x_cmd_Set_NoiseBlanker_Audio ;
+                        pSet_NoiseBlanker_Audio->index  = 1 ;
+
+                        // mode : AM audio noise blanker (audio frequency detection)
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 == 0    // 0 = off
+                         || tmp.udata16 == 1    // 1 = on (default)
+                         ) {
+                            pSet_NoiseBlanker_Audio->mode_hi = tmp.hibyte ;
+                            pSet_NoiseBlanker_Audio->mode_lo = tmp.lobyte ;
+
+                            // sensitivity : AM audio noise blanker trigger sensitivity
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 >= 500      // 500 … 1500 [*0.1 %] = 50 … 150 % relative trigger sensitivity
+                             && tmp.udata16 <= 1500
+                             ) {
+                                pSet_NoiseBlanker_Audio->sensitivity_hi = tmp.hibyte ;
+                                pSet_NoiseBlanker_Audio->sensitivity_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                write_len = 7 ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+                                if (argc == 3) {
+                                    // blank_time : extended API; AM noise blanker time
+                                    tmp.udata16 = va_arg(va, int) ;
+                                    if (tmp.udata16 >= 400  // 400 … 1200 [*1 µs] = 400 … 1200 µs pulse stretch time
+                                     && tmp.udata16 <= 1200
+                                     ) {
+                                        pSet_NoiseBlanker_Audio->blank_time_hi = tmp.hibyte ;
+                                        pSet_NoiseBlanker_Audio->blank_time_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                        write_len = 11 ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+                                    }   // if (tmp.udata16 >= 400 && tmp.udata16 <= 1200)
+                                    else {
+                                        break ;
+                                    }
+                                }   // if (argc == 3)
+#if (TEF668x_API_DEBUG == 0)
+                                SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                , TEF668x_Buf
+                                                , write_len
+                                                , Handle_TEF668x_Service
+                                                ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                ret_state = STATUS_SUCCESS ;
+                            }   // if (tmp.udata16 >= 500 && tmp.udata16 <= 1500)
+                        }   // if (tmp.udata16 == 0 || tmp.udata16 == 1)
+                    }   // if (argc == 2 || argc == 3)
+                }
+                break ;
+            case TEF668X_API_AM_Set_Softmute_Mod :
+                {
+                    if (argc == 4) {
+                        PSet_Softmute_Mod   pSet_Softmute_Mod ;
+
+                        pSet_Softmute_Mod = (PSet_Softmute_Mod)TEF668x_Buf ;
+
+                        pSet_Softmute_Mod->module = TEF668x_Module_Radio_AM ;
+                        pSet_Softmute_Mod->cmd    = TEF668x_cmd_Set_Softmute_Mod ;
+                        pSet_Softmute_Mod->index  = 1 ;
+
+                        // mode : modulation dependent weak signal handling
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 == 0    // 0 = off (default)
+                         || tmp.udata16 == 1    // 1 = on
+                         ) {
+                            pSet_Softmute_Mod->mode_hi = tmp.hibyte ;
+                            pSet_Softmute_Mod->mode_lo = tmp.lobyte ;
+
+                            // start : weak signal handling modulation start
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 >= 100      // 100 … 1000 [*0.1 %] = control when modulation falls below 10% … 100%
+                             && tmp.udata16 <= 1000
+                             ) {
+                                pSet_Softmute_Mod->start_hi = tmp.hibyte ;
+                                pSet_Softmute_Mod->start_lo = tmp.lobyte ;
+
+                                // slope : weak signal handling modulation range
+                                tmp.udata16 = va_arg(va, int) ;
+                                if (tmp.udata16 >= 30      // 30 … 1000 (*0.1 %) = control over modulation range of 3% … 100%
+                                 && tmp.udata16 <= 1000
+                                 ) {
+                                    pSet_Softmute_Mod->slope_hi = tmp.hibyte ;
+                                    pSet_Softmute_Mod->slope_lo = tmp.lobyte ;
+
+                                    // shift : weak signal handling control shift
+                                    tmp.udata16 = va_arg(va, int) ;
+                                    if (tmp.udata16 >= 50      // 50 … 1000 (*0.1 %) = maximum weak signal control shift of 5% … 100%
+                                     && tmp.udata16 <= 1000
+                                     ) {
+                                        pSet_Softmute_Mod->slope_hi = tmp.hibyte ;
+                                        pSet_Softmute_Mod->slope_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                        SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                        I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                        , TEF668x_Buf
+                                                        , 11
+                                                        , Handle_TEF668x_Service
+                                                        ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                        ret_state = STATUS_SUCCESS ;
+                                    }   // if (tmp.udata16 >= 50 && tmp.udata16 <= 1000)
+                                }   // if (tmp.udata16 >= 30 && tmp.udata16 <= 1000)
+                            }   // if (tmp.udata16 >= 100 && tmp.udata16 <= 1000)
+                        }   // if (tmp.udata16 == 0 || tmp.udata16 == 1)
+                    }   // if (argc == 4)
+                }
+                break ;
+            case TEF668X_API_AUDIO_Set_Volume :
+                {
+                    if (argc == 1) {
+                        PSet_Volume     pSet_Volume ;
+
+                        pSet_Volume = (PSet_Volume)TEF668x_Buf ;
+
+                        pSet_Volume->module = TEF668x_Module_Audio ;
+                        pSet_Volume->cmd    = TEF668x_cmd_Set_Volume ;
+                        pSet_Volume->index  = 1 ;
+
+                        // volume : audio volume
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.data16 >= -599  // -599 … +240 = -60 … +24 dB volume
+                         && tmp.data16 <= 240
+                         ) {
+                            pSet_Volume->volume_hi = tmp.hibyte ;
+                            pSet_Volume->volume_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                            SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                            I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                    , TEF668x_Buf
+                                            , 5
+                                            , Handle_TEF668x_Service
+                                            ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                            ret_state = STATUS_SUCCESS ;
+                        }   // if (tmp.data16 >= -599 && tmp.data16 <= 240)
+                    }   // if (argc == 1)
+                }
+                break ;
+            case TEF668X_API_AUDIO_Set_Mute :
+                {
+                    if (argc == 1) {
+                        PSet_Mute   pPSet_Mute ;
+
+                        pPSet_Mute = (PSet_Mute)TEF668x_Buf ;
+
+                        pPSet_Mute->module = TEF668x_Module_Audio ;
+                        pPSet_Mute->cmd    = TEF668x_cmd_Set_Mute ;
+                        pPSet_Mute->index  = 1 ;
+
+                        // mode : audio mute
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 == 0    // 0 = mute disabled
+                         || tmp.udata16 == 1    // 1 = mute active (default)
+                         ) {
+                            pPSet_Mute->mode_hi = tmp.hibyte ;
+                            pPSet_Mute->mode_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                            SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                            I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                    , TEF668x_Buf
+                                            , 5
+                                            , Handle_TEF668x_Service
+                                            ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                            ret_state = STATUS_SUCCESS ;
+                        }   // if (tmp.data16 >= -599 && tmp.data16 <= 240)
+                    }   // if (argc == 1)
+                }
+                break ;
+            case TEF668X_API_AUDIO_Set_Input :
+                {
+                    if (argc == 1) {
+                        PSet_Input  pSet_Input ;
+
+                        pSet_Input = (PSet_Input)TEF668x_Buf ;
+
+                        pSet_Input->module = TEF668x_Module_Audio ;
+                        pSet_Input->cmd    = TEF668x_cmd_Set_Input ;
+                        pSet_Input->index  = 1 ;
+
+                        // volume : audio volume
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 == 0    // 0 = radio with DR blend (default)
+                                                //     (analog radio or digital radio when enabled and DR blend active)
+                         || tmp.udata16 == 32   // 32 = I2S digital audio input I2S_SD_0
+                         || tmp.udata16 == 240  // 240 = sine wave generator
+                         ) {
+                            pSet_Input->source_hi = tmp.hibyte ;
+                            pSet_Input->source_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                            SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                            I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                    , TEF668x_Buf
+                                            , 5
+                                            , Handle_TEF668x_Service
+                                            ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                            ret_state = STATUS_SUCCESS ;
+                        }   // if (tmp.data16 >= -599 && tmp.data16 <= 240)
+                    }   // if (argc == 1)
+                }
+                break ;
+            case TEF668X_API_AUDIO_Set_Output_Source :
+                {
+                    if (argc == 2) {
+                        PSet_Output_Source  pSet_Output_Source ;
+
+                        pSet_Output_Source = (PSet_Output_Source)TEF668x_Buf ;
+
+                        pSet_Output_Source->module = TEF668x_Module_Audio ;
+                        pSet_Output_Source->cmd    = TEF668x_cmd_Set_Output_Source ;
+                        pSet_Output_Source->index  = 1 ;
+
+                        // signal : audio output
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 == 33   // 33 = I2S digital audio output I2S_SD_1
+                         || tmp.udata16 == 128  // 128 = DAC L/R output
+                         ) {
+                            pSet_Output_Source->signal_hi = tmp.hibyte ;
+                            pSet_Output_Source->signal_lo = tmp.lobyte ;
+
+                            // source
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 == 4    // 4 = analog radio
+                             || tmp.udata16 == 32   // 32 = I2S digital audio input I2S_SD_0
+                             || tmp.udata16 == 224  // 224 = audio processor (default)
+                             || tmp.udata16 == 240  // 240 = sine wave generator
+                             ) {
+                                pSet_Output_Source->source_hi = tmp.hibyte ;
+                                pSet_Output_Source->source_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                , TEF668x_Buf
+                                                , 7
+                                                , Handle_TEF668x_Service
+                                                ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                ret_state = STATUS_SUCCESS ;
+                            }   // if (tmp.udata16 == 4 || tmp.udata16 == 32 || tmp.udata16 == 224 || tmp.udata16 == 240)
+                        }   // if (tmp.udata16 == 33 || tmp.udata16 == 128)
+                    }   // if (argc == 2)
+                }
+                break ;
+            case TEF668X_API_AUDIO_Set_Ana_Out :
+                {
+                    if (argc == 2) {
+                        PSet_Ana_Out    pSet_Ana_Out ;
+
+                        pSet_Ana_Out = (PSet_Ana_Out)TEF668x_Buf ;
+
+                        pSet_Ana_Out->module = TEF668x_Module_Audio ;
+                        pSet_Ana_Out->cmd    = TEF668x_cmd_Set_Ana_Out ;
+                        pSet_Ana_Out->index  = 1 ;
+
+                        // signal : analog audio output
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 == 128  // 128 = DAC L/R output
+                         ) {
+                            pSet_Ana_Out->signal_hi = tmp.hibyte ;
+                            pSet_Ana_Out->signal_lo = tmp.lobyte ;
+
+                            // mode : output mode
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 == 0    // 0 = off (power down)
+                             || tmp.udata16 == 1    // 1 = output enabled (default)
+                             ) {
+                                pSet_Ana_Out->mode_hi = tmp.hibyte ;
+                                pSet_Ana_Out->mode_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                , TEF668x_Buf
+                                                , 7
+                                                , Handle_TEF668x_Service
+                                                ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                ret_state = STATUS_SUCCESS ;
+                            }   // if (tmp.udata16 == 0 || tmp.udata16 == 1)
+                        }   // if (tmp.udata16 == 128)
+                    }   // if (argc == 2)
+                }
+                break ;
+            case TEF668X_API_AUDIO_Set_Dig_IO :
+                {
+                    if (argc == 5) {
+                        PSet_Dig_IO     pSet_Dig_IO ;
+
+                        pSet_Dig_IO = (PSet_Dig_IO)TEF668x_Buf ;
+
+                        pSet_Dig_IO->module = TEF668x_Module_Audio ;
+                        pSet_Dig_IO->cmd    = TEF668x_cmd_Set_Dig_IO ;
+                        pSet_Dig_IO->index  = 1 ;
+
+                        // signal : digital audio input / output
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 == 32   // 32 = I²S digital audio I2S_SD_0 (input)
+                         || tmp.udata16 == 33   // 33 = I²S digital audio I2S_SD_1 (output)
+                         ) {
+                            pSet_Dig_IO->signal_hi = tmp.hibyte ;
+                            pSet_Dig_IO->signal_lo = tmp.lobyte ;
+
+                            // mode : I/O mode
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 == 0    // 0 = off (default)
+                             || tmp.udata16 == 1    // 1 = current input (only available for signal = 32)
+                             || tmp.udata16 == 2    // 2 = voltage output (only available for signal = 33)
+                             || tmp.udata16 == 3    // 3 = current output (only available for signal = 33)  )  6 * I0
+                             || (tmp.udata16 >= 11 && tmp.udata16 <= 15)
+                                                    // 11 … 15 = current output level selection  6 … 31 * I0
+                             ) {
+                                pSet_Dig_IO->mode_hi = tmp.hibyte ;
+                                pSet_Dig_IO->mode_lo = tmp.lobyte ;
+
+                                // format : digital audio format select
+                                tmp.udata16 = va_arg(va, int) ;
+                                if (tmp.udata16 == 16   // 16 = I2S 16 bits (fI2S_BCK = 32 * samplerate)
+                                 || tmp.udata16 == 32   // 32 = I2S 32 bits (fI2S_BCK = 64 * samplerate) (default)
+                                 || tmp.udata16 == 272  // 272 = lsb aligned 16 bit (fI2S_BCK = 64 * samplerate)
+                                 || tmp.udata16 == 274  // 274 = lsb aligned 18 bit (fI2S_BCK = 64 * samplerate)
+                                 || tmp.udata16 == 276  // 276 = lsb aligned 20 bit (fI2S_BCK = 64 * samplerate)
+                                 || tmp.udata16 == 280  // 280 = lsb aligned 24 bit (fI2S_BCK = 64 * samplerate)
+                                 ) {
+                                    pSet_Dig_IO->format_hi = tmp.hibyte ;
+                                    pSet_Dig_IO->format_lo = tmp.lobyte ;
+
+                                    // operation : operation mode
+                                    tmp.udata16 = va_arg(va, int) ;
+                                    if (tmp.udata16 == 0    // 0 = audio slave mode; I2S_BCK and I2S_WS input signals defined by
+                                                            //     external signal source (default)
+                                     || tmp.udata16 == 256  // 256 = audio master mode; I2S_BCK and I2S_WS voltage output
+                                     || tmp.udata16 == 273  // 273 = audio master mode; I2S_BCK and I2S_WS current output  6 * I 0
+                                     || tmp.udata16 >= 443  // 443 … 511 = audio master mode; current output level selection:
+                                                            //     [ 15:8 ] = 1, [ 7:4 ] = 11 … 15 = I2S_BCK  6 … 31 * I0
+                                                            //     [ 15:8 ] = 1, [ 3:0 ] = 11 … 15 = I2S_WS   6 … 31 * I0
+                                     ) {
+                                        pSet_Dig_IO->operation_hi = tmp.hibyte ;
+                                        pSet_Dig_IO->operation_lo = tmp.lobyte ;
+
+                                        // samplerate : audio sample rate select
+                                        tmp.udata16 = va_arg(va, int) ;
+                                        if (tmp.udata16 == 3200 // 3200 = 32.0 kHz
+                                         || tmp.udata16 == 4410 // 4410 = 44.1 kHz (default)
+                                         || tmp.udata16 == 4800 // 4800 = 48.0 kHz
+                                         ) {
+                                            pSet_Dig_IO->samplerate_hi = tmp.hibyte ;
+                                            pSet_Dig_IO->samplerate_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                            SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                            I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                            , TEF668x_Buf
+                                                            , 13
+                                                            , Handle_TEF668x_Service
+                                                            ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                            ret_state = STATUS_SUCCESS ;
+                                        }   // if (tmp.udata16 == 3200 || tmp.udata16 == 4410 || tmp.udata16 == 4800)
+                                    }   // if (tmp.udata16 == 0 || tmp.udata16 == 256 || tmp.udata16 == 273 || tmp.udata16 >= 443)
+                                }   // if (tmp.udata16 == 16 || tmp.udata16 == 32 || tmp.udata16 == 272 || tmp.udata16 == 274 || tmp.udata16 == 276 || tmp.udata16 == 280)
+                            }   // if (tmp.udata16 == 0 || tmp.udata16 == 1 || tmp.udata16 == 2 || tmp.udata16 == 3 || (tmp.udata16 >= 11 && tmp.udata16 <= 15))
+                        }   // if (tmp.udata16 == 32 || tmp.udata16 == 33)
+                    }   // if (argc == 5)
+                }
+                break ;
+            case TEF668X_API_AUDIO_Set_Input_Scaler :
+                {
+                    if (argc == 2) {
+                        PSet_Input_Scaler   pSet_Input_Scaler ;
+
+                        pSet_Input_Scaler = (PSet_Input_Scaler)TEF668x_Buf ;
+
+                        pSet_Input_Scaler->module = TEF668x_Module_Audio ;
+                        pSet_Input_Scaler->cmd    = TEF668x_cmd_Set_Input_Scaler ;
+                        pSet_Input_Scaler->index  = 1 ;
+
+                        // source : audio source
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 == 32  // 32 = I2S digital audio input : I2S_SD_0
+                         ) {
+                            pSet_Input_Scaler->source_hi = tmp.hibyte ;
+                            pSet_Input_Scaler->source_lo = tmp.lobyte ;
+
+                            // gain : external source channel gain
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.data16 >= -120  // -120 … +60 [*0.1 dB] = -12 … +6 dB external source signal gain
+                             && tmp.data16 <= 60
+                             ) {
+                                pSet_Input_Scaler->gain_hi = tmp.hibyte ;
+                                pSet_Input_Scaler->gain_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                , TEF668x_Buf
+                                                , 7
+                                                , Handle_TEF668x_Service
+                                                ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                ret_state = STATUS_SUCCESS ;
+                            }   // if (tmp.udata16 >= -120 || tmp.udata16 <= 60)
+                        }   // if (tmp.udata16 == 32)
+                    }   // if (argc == 2)
+                }
+                break ;
+            case TEF668X_API_AUDIO_Set_WaveGen :
+                {
+                    if (argc == 6) {
+                        PSet_WaveGen    pSet_WaveGen ;
+
+                        pSet_WaveGen = (PSet_WaveGen)TEF668x_Buf ;
+
+                        pSet_WaveGen->module = TEF668x_Module_Audio ;
+                        pSet_WaveGen->cmd    = TEF668x_cmd_Set_WaveGen ;
+                        pSet_WaveGen->index  = 1 ;
+
+                        // mode :
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 != 4// 0 = wave signal off (default)
+                         && tmp.udata16 < 8 // 1 = wave 1 signal on Left channel
+                                            // 2 = wave 2 signal on Right channel
+                                            // 3 = wave 1 signal on Left channel and wave 2 signal on Right channel
+                                            // 5 = wave 1 signal on Left and Right channel
+                                            // 6 = wave 2 signal on Left and Right channel
+                                            // 7 = wave 1 + wave 2 signal on Left and Right channel
+                         ) {
+                            pSet_WaveGen->mode_hi = tmp.hibyte ;
+                            pSet_WaveGen->mode_lo = tmp.lobyte ;
+
+                            // offset : DC offset
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.data16 >= -32768    // -32768 … + 32767 (* 1 LSB of 16 bit) = max negative … max positive.
+                             && tmp.data16 <= 32768
+                             ) {
+                                pSet_WaveGen->offset_hi = tmp.hibyte ;
+                                pSet_WaveGen->offset_lo = tmp.lobyte ;
+
+                                // amplitude1 : wave 1 amplitude
+                                tmp.udata16 = va_arg(va, int) ;
+                                if (tmp.data16 >= -300  // -300 … 0 (*0.1 dB) = -30 … 0 dB
+                                 && tmp.data16 <= 0
+                                 ) {
+                                    pSet_WaveGen->amplitude1_hi = tmp.hibyte ;
+                                    pSet_WaveGen->amplitude1_lo = tmp.lobyte ;
+
+                                    // frequency1 : wave 1 frequency
+                                    tmp.udata16 = va_arg(va, int) ;
+                                    if (tmp.udata16 >= 10       // 10 … 20000 (*1 Hz) = 10 Hz … 20 kHz
+                                     && tmp.udata16 <= 20000
+                                     ) {
+                                        pSet_WaveGen->frequency1_hi = tmp.hibyte ;
+                                        pSet_WaveGen->frequency1_lo = tmp.lobyte ;
+
+                                        // amplitude2 : wave 2 amplitude
+                                        tmp.udata16 = va_arg(va, int) ;
+                                        if (tmp.data16 >= -300  // -300 … 0 (*0.1 dB) = -30 … 0 dB
+                                         && tmp.data16 <= 0
+                                         ) {
+                                            pSet_WaveGen->amplitude2_hi = tmp.hibyte ;
+                                            pSet_WaveGen->amplitude2_lo = tmp.lobyte ;
+
+                                            // frequency2 : wave 2 frequency
+                                            tmp.udata16 = va_arg(va, int) ;
+                                            if (tmp.udata16 >= 10   // 10 … 20000 (*1 Hz) = 10 Hz … 20 kHz
+                                             && tmp.udata16 <= 20000
+                                             ) {
+                                                pSet_WaveGen->frequency2_hi = tmp.hibyte ;
+                                                pSet_WaveGen->frequency2_lo = tmp.lobyte ;
+
+    #if (TEF668x_API_DEBUG == 0)
+                                                SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                                I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                                , TEF668x_Buf
+                                                                , 13
+                                                                , Handle_TEF668x_Service
+                                                                ) ;
+    #endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                                ret_state = STATUS_SUCCESS ;
+                                            }   // if (tmp.udata16 >= 10 && tmp.udata16 <= 20000)
+                                        }   // if (tmp.data16 >= -300 && tmp.data16 <= 0)
+                                    }   // if (tmp.udata16 >= 10 && tmp.udata16 <= 20000)
+                                }   // if (tmp.data16 >= -300 && tmp.data16 <= 0)
+                            }   // if (tmp.data16 >= -32768 && tmp.udata16 <= 32768)
+                        }   // if (tmp.udata16 != 4 && tmp.udata16 < 8)
+                    }   // if (argc == 6)
+                }
+                break ;
+            case TEF668X_API_APPL_Set_OperationMode :
+                {
+                    if (argc == 1) {
+                        PSet_OperationMode  pSet_OperationMode ;
+
+                        pSet_OperationMode = (PSet_OperationMode)TEF668x_Buf ;
+
+                        pSet_OperationMode->module = TEF668x_Module_APPL ;
+                        pSet_OperationMode->cmd    = TEF668x_cmd_Set_OperationMode ;
+                        pSet_OperationMode->index  = 1 ;
+
+                        // mode : device operation mode
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 == 0        // 0 = normal operation
+                         || tmp.udata16 == 1        // 1 = radio standby mode (low-power mode without radio function) (default)
+                         ) {
+                            pSet_OperationMode->mode_hi = tmp.hibyte ;
+                            pSet_OperationMode->mode_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                            SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                            I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                            , TEF668x_Buf
+                                            , 5
+                                            , Handle_TEF668x_Service
+                                            ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                            ret_state = STATUS_SUCCESS ;
+                        }   // if (tmp.udata16 == 0 || tmp.udata16 == 1)
+                    }   // if (argc == 1)
+                }
+                break ;
+            case TEF668X_API_APPL_Set_GPIO :
+                {
+                    if (argc == 3) {
+                        PSet_GPIO   pSet_GPIO ;
+
+                        pSet_GPIO = (PSet_GPIO)TEF668x_Buf ;
+
+                        pSet_GPIO->module = TEF668x_Module_APPL ;
+                        pSet_GPIO->cmd    = TEF668x_cmd_Set_GPIO ;
+                        pSet_GPIO->index  = 1 ;
+
+                        // pin : GPIO number
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 <= 3    // 0 … 3 = GPIO number
+                         ) {
+                            pSet_GPIO->pin_hi = tmp.hibyte ;
+                            pSet_GPIO->pin_lo = tmp.lobyte ;
+
+                            // module : AM/FM
+                            tmp.udata16 = va_arg(va, int) ;
+                            if (tmp.udata16 == TEF668x_Module_Radio_FM   // 32 = FM
+                             || tmp.udata16 == TEF668x_Module_Radio_AM   // 33 = AM
+                             ) {
+                                pSet_GPIO->module_hi = tmp.hibyte ;
+                                pSet_GPIO->module_lo = tmp.lobyte ;
+
+                                // feature
+                                tmp.udata16 = va_arg(va, int) ;
+                                if (tmp.udata16 <= 3    // 0 = no use (default) (FM / AM)
+                                                        // 1 = general purpose input (FM / AM)
+                                                        // 2 = general purpose output ‘0’ (FM / AM)
+                                                        // 3 = general purpose output ‘1’ (FM / AM)
+                                 || (tmp.udata16 >= 257 // 257 = output RDS (FM : see cmd 81 ‘DAVN’)
+                                  && tmp.udata16 <= 262)// 258 = output QSI (FM / AM : see cmd 82 ‘timer and AF_Update flag’)
+                                                        // 259 = output QSI + RDS (active ‘low’ if ‘DAVN’ is active or ‘QSI’ is active)
+                                                        // 260 = output RDDA (FM : see cmd 81 ‘RDDA, RDCL legacy option’)
+                                                        // 261 = output RDCL (FM : see cmd 81 ‘RDDA, RDCL legacy option’)
+                                                        // 262 = output AGC (FM : see cmd 11 ‘AGC step extension’)
+                                 ) {
+                                    pSet_GPIO->feature_hi = tmp.hibyte ;
+                                    pSet_GPIO->feature_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                                    SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                                    I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                                    , TEF668x_Buf
+                                                    , 9
+                                                    , Handle_TEF668x_Service
+                                                    ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                                    ret_state = STATUS_SUCCESS ;
+                                 }   // if (tmp.udata16 <= 3 || (tmp.udata16 >= 257 && tmp.udata16 <= 262))
+                            }   // if (tmp.udata16 == TEF668x_Module_Radio_FM || tmp.udata16 == TEF668x_Module_Radio_AM)
+                        }   // if (tmp.udata16 <= 3)
+                    }   // if (argc == 3)
+                }
+                break ;
+            case TEF668X_API_APPL_Set_ReferenceClock :
+                {
+                    if (argc == 2) {
+                        PSet_ReferenceClock pSet_ReferenceClock ;
+                        XDATA32             tmp32 ;
+
+                        pSet_ReferenceClock = (PSet_ReferenceClock)TEF668x_Buf ;
+
+                        pSet_ReferenceClock->module = TEF668x_Module_APPL ;
+                        pSet_ReferenceClock->cmd    = TEF668x_cmd_Set_ReferenceClock ;
+                        pSet_ReferenceClock->index  = 1 ;
+
+                        // the reference clock frequency
+                        tmp32.udata32 = va_arg(va, uint32_t) ;
+                        pSet_ReferenceClock->frequency_msb_hi = tmp32.hword_msb ;
+                        pSet_ReferenceClock->frequency_msb_lo = tmp32.hword_lsb ;
+                        pSet_ReferenceClock->frequency_lsb_hi = tmp32.lword_msb ;
+                        pSet_ReferenceClock->frequency_lsb_lo = tmp32.lword_lsb ;
+
+                        // clock type
+                        tmp32.word_lsb = va_arg(va, int) ;
+                        if (tmp32.word_lsb == 0     // crystal oscillator operation (default)
+                         || tmp32.word_lsb == 1     // external clock input operation
+                        ) {
+                            pSet_ReferenceClock->type_hi = tmp32.lword_msb ;
+                            pSet_ReferenceClock->type_lo = tmp32.lword_lsb ;
+
+#if (TEF668x_API_DEBUG == 0)
+                            SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                            I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                            , TEF668x_Buf
+                                            , 9
+                                            , Handle_TEF668x_Service
+                                            ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                            ret_state = STATUS_SUCCESS ;
+                        }   // if (tmp32.word_lsb == 0 || tmp32.word_lsb == 1)
+                    }   // if (argc == 2)
+                }
+                break ;
+            case TEF668X_API_APPL_Activate :
+                {
+                    if (argc == 1) {
+                        PSet_APPL_Activate  pSet_APPL_Activate ;
+
+                        pSet_APPL_Activate = (PSet_APPL_Activate)TEF668x_Buf ;
+
+                        pSet_APPL_Activate->module = TEF668x_Module_APPL ;
+                        pSet_APPL_Activate->cmd    = TEF668x_cmd_Activate ;
+                        pSet_APPL_Activate->index  = 1 ;
+
+                        // mode
+                        tmp.udata16 = va_arg(va, int) ;
+                        if (tmp.udata16 == 1    // 1 = goto ‘active’ state with operation mode of ‘radio standby’
+                         ) {
+                            pSet_APPL_Activate->mode_hi = tmp.hibyte ;
+                            pSet_APPL_Activate->mode_lo = tmp.lobyte ;
+
+#if (TEF668x_API_DEBUG == 0)
+                            SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+                            I2C_WriteDataCB(I2C_ADDRESS_TEF668x
+                                            , TEF668x_Buf
+                                            , 5
+                                            , Handle_TEF668x_Service
+                                            ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                            ret_state = STATUS_SUCCESS ;
+                        }   // if (tmp.udata16 == 1)
+                    }   // if (argc == 1)
+                }
+                break ;
+            case TEF668X_API_FM_Get_Quality_Status :
+            case TEF668X_API_AM_Get_Quality_Status :
+                {
+                    if (argc == 1) {
+                        uint8_t *   rbuf = (uint8_t *)NULL ;
+
+                        if (cmd == TEF668X_API_FM_Get_Quality_Status) {
+                            TEF668x_Buf[0] = TEF668x_Module_Radio_FM ;
+                        }   // if (cmd == TEF668X_API_FM_Get_Quality_Status)
+                        else {
+                            TEF668x_Buf[0] = TEF668x_Module_Radio_AM ;
+                        }   // if (cmd == TEF668X_API_AM_Get_Quality_Status)
+                        TEF668x_Buf[1] = TEF668x_cmd_Get_Quality_Status ;
+                        TEF668x_Buf[2] = 1 ;
+
+                        rbuf = va_arg(va, uint8_t *) ;
+                        if (rbuf != (uint8_t *)NULL) {
+#if (TEF668x_API_DEBUG == 0)
+                            SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+
+                            I2C_WriteReadDataCB(I2C_ADDRESS_TEF668x
+                                               , TEF668x_Buf
+                                               , 3
+                                               , rbuf
+                                               , 1
+                                               , Handle_TEF668x_Service
+                                               ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                            ret_state = STATUS_SUCCESS ;
+                        }   // if (rbuf != (uint8_t *)NULL)
+                    }   // if (argc == 1)
+                }
+                break ;
+            case TEF668X_API_FM_Get_Quality_Data :
+            case TEF668X_API_AM_Get_Quality_Data :
+                {
+                    if (argc == 1) {
+                        uint8_t *   rbuf = (uint8_t *)NULL ;
+
+                        if (cmd == TEF668X_API_FM_Get_Quality_Data) {
+                            TEF668x_Buf[0] = TEF668x_Module_Radio_FM ;
+                        }   // if (cmd == TEF668X_API_FM_Get_Quality_Data)
+                        else {
+                            TEF668x_Buf[0] = TEF668x_Module_Radio_AM ;
+                        }   // if (cmd == TEF668X_API_AM_Get_Quality_Data)
+                        TEF668x_Buf[1] = TEF668x_cmd_Get_Quality_Data ;
+                        TEF668x_Buf[2] = 1 ;
+
+                        rbuf = va_arg(va, uint8_t *) ;
+                        if (rbuf != (uint8_t *)NULL) {
+#if (TEF668x_API_DEBUG == 0)
+                            SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+
+                            I2C_WriteReadDataCB(I2C_ADDRESS_TEF668x
+                                               , TEF668x_Buf
+                                               , 3
+                                               , rbuf
+                                               , 14
+                                               , Handle_TEF668x_Service
+                                               ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                            ret_state = STATUS_SUCCESS ;
+                        }   // if (rbuf != (uint8_t *)NULL)
+                    }   // if (argc == 1)
+                }
+                break ;
+            case TEF668X_API_FM_Get_RDS_Status :
+                {
+                    if (argc == 1) {
+                        uint8_t *   rbuf = (uint8_t *)NULL ;
+
+                        TEF668x_Buf[0] = TEF668x_Module_Radio_FM ;
+                        TEF668x_Buf[1] = TEF668x_cmd_Get_RDS_Status ;
+                        TEF668x_Buf[2] = 1 ;
+
+                        rbuf = va_arg(va, uint8_t *) ;
+                        if (rbuf != (uint8_t *)NULL) {
+#if (TEF668x_API_DEBUG == 0)
+                            SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+
+                            I2C_WriteReadDataCB(I2C_ADDRESS_TEF668x
+                                               , TEF668x_Buf
+                                               , 3
+                                               , rbuf
+                                               , 2
+                                               , Handle_TEF668x_Service
+                                               ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                            ret_state = STATUS_SUCCESS ;
+                        }   // if (rbuf != (uint8_t *)NULL)
+                    }   // if (argc == 1)
+                }
+                break ;
+            case TEF668X_API_FM_Get_RDS_Data :
+                {
+                    if (argc == 1) {
+                        uint8_t *   rbuf = (uint8_t *)NULL ;
+
+                        TEF668x_Buf[0] = TEF668x_Module_Radio_FM ;
+                        TEF668x_Buf[1] = TEF668x_cmd_Get_RDS_Data ;
+                        TEF668x_Buf[2] = 1 ;
+
+                        rbuf = va_arg(va, uint8_t *) ;
+                        if (rbuf != (uint8_t *)NULL) {
+#if (TEF668x_API_DEBUG == 0)
+                            SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+
+                            I2C_WriteReadDataCB(I2C_ADDRESS_TEF668x
+                                               , TEF668x_Buf
+                                               , 3
+                                               , rbuf
+                                               , 12
+                                               , Handle_TEF668x_Service
+                                               ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                            ret_state = STATUS_SUCCESS ;
+                        }   // if (rbuf != (uint8_t *)NULL)
+                    }   // if (argc == 1)
+                }
+                break ;
+            case TEF668X_API_FM_Get_AGC :
+            case TEF668X_API_AM_Get_AGC :
+                {
+                    if (argc == 1) {
+                        uint8_t *   rbuf = (uint8_t *)NULL ;
+
+                        if (cmd == TEF668X_API_FM_Get_AGC) {
+                            TEF668x_Buf[0] = TEF668x_Module_Radio_FM ;
+                        }   // if (cmd == TEF668X_API_FM_Get_AGC)
+                        else {
+                            TEF668x_Buf[0] = TEF668x_Module_Radio_AM ;
+                        }   // if (cmd == TEF668X_API_AM_Get_AGC)
+                        TEF668x_Buf[1] = TEF668x_cmd_Get_AGC ;
+                        TEF668x_Buf[2] = 1 ;
+
+                        rbuf = va_arg(va, uint8_t *) ;
+                        if (rbuf != (uint8_t *)NULL) {
+#if (TEF668x_API_DEBUG == 0)
+                            SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+
+                            I2C_WriteReadDataCB(I2C_ADDRESS_TEF668x
+                                               , TEF668x_Buf
+                                               , 3
+                                               , rbuf
+                                               , 4
+                                               , Handle_TEF668x_Service
+                                               ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                            ret_state = STATUS_SUCCESS ;
+                        }   // if (rbuf != (uint8_t *)NULL)
+                    }   // if (argc == 1)
+                }
+                break ;
+            case TEF668X_API_FM_Get_Signal_Status :
+            case TEF668X_API_AM_Get_Signal_Status :
+                {
+                    if (argc == 1) {
+                        uint8_t *   rbuf = (uint8_t *)NULL ;
+
+                        if (cmd == TEF668X_API_FM_Get_Signal_Status) {
+                            TEF668x_Buf[0] = TEF668x_Module_Radio_FM ;
+                        }   // if (cmd == TEF668X_API_FM_Get_Signal_Status)
+                        else {
+                            TEF668x_Buf[0] = TEF668x_Module_Radio_AM ;
+                        }   // if (cmd == TEF668X_API_AM_Get_Signal_Status)
+                        TEF668x_Buf[1] = TEF668x_cmd_Get_Signal_Status ;
+                        TEF668x_Buf[2] = 1 ;
+
+                        rbuf = va_arg(va, uint8_t *) ;
+                        if (rbuf != (uint8_t *)NULL) {
+#if (TEF668x_API_DEBUG == 0)
+                            SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+
+                            I2C_WriteReadDataCB(I2C_ADDRESS_TEF668x
+                                               , TEF668x_Buf
+                                               , 3
+                                               , rbuf
+                                               , 2
+                                               , Handle_TEF668x_Service
+                                               ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                            ret_state = STATUS_SUCCESS ;
+                        }   // if (rbuf != (uint8_t *)NULL)
+                    }   // if (argc == 1)
+                }
+                break ;
+            case TEF668X_API_FM_Get_Processing_Status :
+            case TEF668X_API_AM_Get_Processing_Status :
+                {
+                    if (argc == 1) {
+                        uint8_t *   rbuf = (uint8_t *)NULL ;
+
+                        if (cmd == TEF668X_API_FM_Get_Processing_Status) {
+                            TEF668x_Buf[0] = TEF668x_Module_Radio_FM ;
+                        }   // if (cmd == TEF668X_API_FM_Get_Processing_Status)
+                        else {
+                            TEF668x_Buf[0] = TEF668x_Module_Radio_AM ;
+                        }   // if (cmd == TEF668X_API_AM_Get_Processing_Status)
+                        TEF668x_Buf[1] = TEF668x_cmd_Get_Processing_Status ;
+                        TEF668x_Buf[2] = 1 ;
+
+                        rbuf = va_arg(va, uint8_t *) ;
+                        if (rbuf != (uint8_t *)NULL) {
+#if (TEF668x_API_DEBUG == 0)
+                            SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+
+                            if (cmd == TEF668X_API_FM_Get_Processing_Status) {
+                                I2C_WriteReadDataCB(I2C_ADDRESS_TEF668x
+                                                   , TEF668x_Buf
+                                                   , 3
+                                                   , rbuf
+                                                   , 12
+                                                   , Handle_TEF668x_Service
+                                                   ) ;
+                            }   // if (cmd == TEF668X_API_FM_Get_Processing_Status)
+                            else {
+                                I2C_WriteReadDataCB(I2C_ADDRESS_TEF668x
+                                                   , TEF668x_Buf
+                                                   , 3
+                                                   , rbuf
+                                                   , 4
+                                                   , Handle_TEF668x_Service
+                                                   ) ;
+                            }   // if (cmd == TEF668X_API_AM_Get_Processing_Status)
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                            ret_state = STATUS_SUCCESS ;
+                        }   // if (rbuf != (uint8_t *)NULL)
+                    }   // if (argc == 1)
+                }
+                break ;
+            case TEF668X_API_FM_Get_Interface_Status :
+            case TEF668X_API_AM_Get_Interface_Status :
+                {
+                    if (argc == 1) {
+                        uint8_t *   rbuf = (uint8_t *)NULL ;
+
+                        if (cmd == TEF668X_API_FM_Get_Interface_Status) {
+                            TEF668x_Buf[0] = TEF668x_Module_Radio_FM ;
+                        }   // if (cmd == TEF668X_API_FM_Get_Interface_Status)
+                        else {
+                            TEF668x_Buf[0] = TEF668x_Module_Radio_AM ;
+                        }   // if (cmd == TEF668X_API_AM_Get_Interface_Status)
+                        TEF668x_Buf[1] = TEF668x_cmd_Get_Interface_Status ;
+                        TEF668x_Buf[2] = 1 ;
+
+                        rbuf = va_arg(va, uint8_t *) ;
+                        if (rbuf != (uint8_t *)NULL) {
+#if (TEF668x_API_DEBUG == 0)
+                            SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+
+                            I2C_WriteReadDataCB(I2C_ADDRESS_TEF668x
+                                               , TEF668x_Buf
+                                               , 3
+                                               , rbuf
+                                               , 2
+                                               , Handle_TEF668x_Service
+                                               ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                            ret_state = STATUS_SUCCESS ;
+                        }   // if (rbuf != (uint8_t *)NULL)
+                    }   // if (argc == 1)
+                }
+                break ;
+            case TEF668X_API_APPL_Get_Operation_Status :
+                {
+                    if (argc == 1) {
+                        uint8_t *   rbuf = (uint8_t *)NULL ;
+
+                        TEF668x_Buf[0] = TEF668x_Module_APPL ;
+                        TEF668x_Buf[1] = TEF668x_cmd_Get_Operation_Status ;
+                        TEF668x_Buf[2] = 1 ;
+
+                        rbuf = va_arg(va, uint8_t *) ;
+                        if (rbuf != (uint8_t *)NULL) {
+#if (TEF668x_API_DEBUG == 0)
+                            SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+
+                            I2C_WriteReadDataCB(I2C_ADDRESS_TEF668x
+                                               , TEF668x_Buf
+                                               , 3
+                                               , rbuf
+                                               , 2
+                                               , Handle_TEF668x_Service
+                                               ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                            ret_state = STATUS_SUCCESS ;
+                        }   // if (rbuf != (uint8_t *)NULL)
+                    }   // if (argc == 1)
+                }
+                break ;
+            case TEF668X_API_APPL_Get_GPIO_Status :
+                {
+                    if (argc == 1) {
+                        uint8_t *   rbuf = (uint8_t *)NULL ;
+
+                        TEF668x_Buf[0] = TEF668x_Module_APPL ;
+                        TEF668x_Buf[1] = TEF668x_cmd_Get_GPIO_Status ;
+                        TEF668x_Buf[2] = 1 ;
+
+                        rbuf = va_arg(va, uint8_t *) ;
+                        if (rbuf != (uint8_t *)NULL) {
+#if (TEF668x_API_DEBUG == 0)
+                            SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+
+                            I2C_WriteReadDataCB(I2C_ADDRESS_TEF668x
+                                               , TEF668x_Buf
+                                               , 3
+                                               , rbuf
+                                               , 2
+                                               , Handle_TEF668x_Service
+                                               ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                            ret_state = STATUS_SUCCESS ;
+                        }   // if (rbuf != (uint8_t *)NULL)
+                    }   // if (argc == 1)
+                }
+                break ;
+            case TEF668X_API_APPL_Get_Identification :
+                {
+                    if (argc == 1) {
+                        uint8_t *   rbuf = (uint8_t *)NULL ;
+
+                        TEF668x_Buf[0] = TEF668x_Module_APPL ;
+                        TEF668x_Buf[1] = TEF668x_cmd_Get_Identification ;
+                        TEF668x_Buf[2] = 1 ;
+
+                        rbuf = va_arg(va, uint8_t *) ;
+                        if (rbuf != (uint8_t *)NULL) {
+#if (TEF668x_API_DEBUG == 0)
+                            SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+
+                            I2C_WriteReadDataCB(I2C_ADDRESS_TEF668x
+                                               , TEF668x_Buf
+                                               , 3
+                                               , rbuf
+                                               , 6
+                                               , Handle_TEF668x_Service
+                                               ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                            ret_state = STATUS_SUCCESS ;
+                        }   // if (rbuf != (uint8_t *)NULL)
+                    }   // if (argc == 1)
+                }
+                break ;
+            case TEF668X_API_APPL_Get_LastWrite :
+                {
+                    if (argc == 1) {
+                        uint8_t *   rbuf = (uint8_t *)NULL ;
+
+                        TEF668x_Buf[0] = TEF668x_Module_APPL ;
+                        TEF668x_Buf[1] = TEF668x_cmd_Get_LastWrite ;
+                        TEF668x_Buf[2] = 1 ;
+
+                        rbuf = va_arg(va, uint8_t *) ;
+                        if (rbuf != (uint8_t *)NULL) {
+#if (TEF668x_API_DEBUG == 0)
+                            SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+
+                            I2C_WriteReadDataCB(I2C_ADDRESS_TEF668x
+                                               , TEF668x_Buf
+                                               , 3
+                                               , rbuf
+                                               , 14
+                                               , Handle_TEF668x_Service
+                                               ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                            ret_state = STATUS_SUCCESS ;
+                        }   // if (rbuf != (uint8_t *)NULL)
+                    }   // if (argc == 1)
+                }
+                break ;
+            case TEF668X_API_APPL_Get_Interface_Status :
+                {
+                    if (argc == 1) {
+                        uint8_t *   rbuf = (uint8_t *)NULL ;
+
+                        TEF668x_Buf[0] = TEF668x_Module_APPL ;
+                        TEF668x_Buf[1] = TEF668x_cmd_Get_Interface_Status ;
+                        TEF668x_Buf[2] = 1 ;
+
+                        rbuf = va_arg(va, uint8_t *) ;
+                        if (rbuf != (uint8_t *)NULL) {
+#if (TEF668x_API_DEBUG == 0)
+                            SetState_TEF668x (TEF668x_STATE_ACCESS_SERVICE) ;
+
+                            I2C_WriteReadDataCB(I2C_ADDRESS_TEF668x
+                                               , TEF668x_Buf
+                                               , 3
+                                               , rbuf
+                                               , 2
+                                               , Handle_TEF668x_Service
+                                               ) ;
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+                            ret_state = STATUS_SUCCESS ;
+                        }   // if (rbuf != (uint8_t *)NULL)
+                    }   // if (argc == 1)
+                }
+                break ;
+        }   // switch (cmd)
+        va_end (va) ;
+#if (TEF668x_API_DEBUG == 0)
+    }   // if (GetState_TEF668x() == STATUS_SUCCESS && GetI2CExecuteState() == (status_t)I2C_SUCCESS)
+#endif  // #if (TEF668x_API_DEBUG == 0)
+
+    return (ret_state) ;
+}   // status_t TEF668x_api (uint8_t cmd, PFUNCvS cb, uint8_t argc, ...)
+
+void Handle_TEF668x_Service (status_t exe_state) {
+    if (tuner_api_callback != (PFUNCvS)NULL) {
+        tuner_api_callback(exe_state) ;
+        tuner_api_callback = (PFUNCvS)NULL ;
+    }   // if (tuner_api_callback != (PFUNCvS)NULL)
+    SetState_TEF668x (TEF668x_STATE_STANDBY) ;
+}   // void Handle_TEF668x_Service (status_t exe_state)
+
+void Handle_TEF668x (void) {
+    status_t tmp_state ;
+
+    if (GetI2CState() != STATUS_BUSY) {
+        switch (state_TEF668x) {
+            case TEF668x_STATE_WAIT_POWERON :
+                TimerStop(&tmr_TEF668x) ;
+                TimerSet(&tmr_TEF668x, 10) ;
+                state_TEF668x = TEF668x_STATE_CHECK_POWERON ;
+                break ;
+            case TEF668x_STATE_CHECK_POWERON :
+                if (TimerHasExpired(&tmr_TEF668x) == TRUE) {
+                    TimerStop(&tmr_TEF668x) ;
+                    state_TEF668x = TEF668x_STATE_CHECK_POWERON_BEGIN ;
+                }   // if (TimerHasExpired(&tmr_TEF668x) == TRUE)
+                break ;
+            case TEF668x_STATE_CHECK_POWERON_BEGIN :
+                TEF668x_Buf[0] = TEF668x_Module_APPL ;
+                TEF668x_Buf[1] = TEF668x_cmd_Get_Operation_Status ;
+                TEF668x_Buf[2] = 1 ;
+                I2C_WriteReadData(I2C_ADDRESS_TEF668x, TEF668x_Buf, 3U, TEF668x_Buf+3, 2U) ;
+                state_TEF668x = TEF668x_STATE_CHECK_POWERON_END ;
+                TimerSet(&tmr_TEF668x, 50) ;
+                break ;
+            case TEF668x_STATE_CHECK_POWERON_END :
+                tmp_state = GetI2CExecuteState() ;
+                if (tmp_state == (status_t)I2C_SUCCESS) {
+                    TimerStop(&tmr_TEF668x) ;
+                    state_boot = TEF668x_BOOT_STATE_START_STAGE ;
+                    state_TEF668x = TEF668x_STATE_BOOT ;
+                }   // if (tmp_state == I2C_SUCCESS)
+                else if (TimerHasExpired(&tmr_TEF668x) == TRUE) {
+                    state_TEF668x = TEF668x_STATE_CHECK_POWERON_BEGIN ;
+                }   // if (TimerHasExpired(&tmr_TEF668x) == TRUE)
+                break ;
+            case TEF668x_STATE_BOOT :
+                if (TEF668x_Boot() == STATUS_SUCCESS) {
+                    state_TEF668x = TEF668x_STATE_STANDBY ;
+                }   // if (TEF668x_Boot() == STATUS_SUCCESS)
+                break ;
+            case TEF668x_STATE_STANDBY :
+                break ;
+            case TEF668x_STATE_ACCESS_SERVICE :
+                break ;
+        }   // switch (state_TEF668x)
+    }   // if (GetI2CState() != STATUS_BUSY)
+    // Tune_To(TEF668x_Buf, TEF668x_Module_Radio_FM, Tuning_Actions_Mode_Preset, 8930) ;
+}   // void Handle_TEF668x (void)
+
+status_t TEF668x_Boot (void) {
+    // this procedure takes 350 ms more or less.
+    switch(state_boot) {
+        case TEF668x_BOOT_STATE_START_STAGE :
+            ptr_boot =  (uint8_t *)tuner_init_para_tab ;
+            state_boot = TEF668x_BOOT_STATE_INIT_STAGE ;
+            break ;
+        case TEF668x_BOOT_STATE_INIT_STAGE :
+            if (*ptr_boot == 0) {
+                return (STATUS_SUCCESS) ;
+            }   // if (*ptr_boot == 0)
+            else {
+                switch (*(ptr_boot+1)) {
+                    case INIT_FLAG_TIMER :
+                        TimerStop(&tmr_TEF668x) ;
+                        TimerSet(&tmr_TEF668x, *(ptr_boot+2)) ;
+                        state_boot = TEF668x_BOOT_STATE_WAITFOR_TIMEOUT_STAGE ;
+                        break ;
+                    case INIT_FLAG_PATCH1 :
+                        ptr_patch = (uint8_t *)PatchByteValues ;
+                        patch_size = (uint32_t)(sizeof(PatchByteValues)/sizeof (uint8_t)) ;
+                        state_boot = TEF668x_BOOT_STATE_LOAD_PATCH_DATA_STAGE ;
+                        break ;
+                    case INIT_FLAG_PATCH2 :
+                        ptr_patch = (uint8_t *)LutByteValues ;
+                        patch_size = (uint32_t)(sizeof(LutByteValues)/sizeof (uint8_t)) ;
+                        state_boot = TEF668x_BOOT_STATE_LOAD_PATCH_DATA_STAGE ;
+                        break ;
+                    default :
+                        I2C_WriteData(I2C_ADDRESS_TEF668x, ptr_boot+1, *ptr_boot) ;
+                        break ;
+                }   // switch ()*(ptr_boot+1))
+                ptr_boot = ptr_boot + *ptr_boot + 1 ;
+            }   // lenth != 0
+            break ;
+        case TEF668x_BOOT_STATE_WAITFOR_TIMEOUT_STAGE :    // INIT_FLAG_TIMER
+            if (TimerHasExpired(&tmr_TEF668x) == TRUE) {
+                state_boot = TEF668x_BOOT_STATE_INIT_STAGE ;
+            }   // if (TimerHasExpired(&tmr_TEF668x) == TRUE)
+            break ;
+        case TEF668x_BOOT_STATE_LOAD_PATCH_DATA_STAGE :    // upload patch data
+            if (patch_size > 0) {
+                uint8_t len ;
+
+                TEF668x_Buf[0] = (0x1BU) ;
+                if (patch_size > TEF668X_SPLIT_SIZE) {
+                    len = TEF668X_SPLIT_SIZE ;
+                }   // if (patch_size > TEF668X_SPLIT_SIZE)
+                else {
+                    len = patch_size ;
+                }   // if (patch_size <= TEF668X_SPLIT_SIZE)
+                memcpy (TEF668x_Buf+1, ptr_patch, len) ;
+
+                I2C_WriteData(I2C_ADDRESS_TEF668x, TEF668x_Buf, len+1) ;
+                patch_size = patch_size - (uint32_t)len ;
+                ptr_patch  = ptr_patch + len ;
+            }   //if (patch_size > 0)
+            else {
+                state_boot = TEF668x_BOOT_STATE_INIT_STAGE ;
+            }
+            break ;
+        default :
+            return (STATUS_SUCCESS) ;
+            break ;
+    }   // switch(state_boot)
+    return (STATUS_BUSY) ;
+}   // status_t TEF668x_Boot (void)
 
 /*******************************************************************************
  * End of File (TEF668x.c)

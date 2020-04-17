@@ -86,6 +86,7 @@ extern void GPT_Reset1msVal(void);  //Pinchi 20190115 add
 *  Returns     : none
 *****************************************************************************/
 extern void TimerSet(uint32_t *STimer, uint32_t TimeLength) ;
+extern void TimerSet100us(uint32_t *STimer, uint32_t TimeLength) ;
 /*****************************************************************************
 *  Name        : TimerStop
 *  Description : stop timer

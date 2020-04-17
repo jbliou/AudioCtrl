@@ -21,16 +21,19 @@
 /**************************************** Inclusion files *****************************************/
 #include "Gpt.h"
 #include "clockMan1.h"
+#include "board.h"
 
 ftm_state_t ftmStateStruct ;
 
 /**************************************Component configuration ************************************/
 
 /* 1ms timer for normal operations */
-static volatile uint32_t  GPT_Cntr1ms;
+//static volatile uint32_t  GPT_Cntr1ms = 0 ;
+volatile uint32_t  GPT_Cntr1ms = 0 ;
 
 /**************************************Function definitions ***************************************/
 void ftmTimerISR(void) {
+#if(0)
     if (GPT_Cntr1ms == 0xFFFFFFFFU) {
         /* Reset the counter to avoid overflow */
         GPT_Cntr1ms = 0U;
@@ -38,6 +41,10 @@ void ftmTimerISR(void) {
         /* Increment global 1ms counter */
         GPT_Cntr1ms++;
     }
+#else
+    /* Increment global 1ms counter */
+    GPT_Cntr1ms++;
+#endif  // #if(0)
     /* Clear FTM Timer Overflow flag */
     FTM_DRV_ClearStatusFlags(INST_FLEXTIMER_MC1, (uint32_t)FTM_TIME_OVER_FLOW_FLAG);
 }   // void ftmTimerISR(void)
@@ -57,7 +64,7 @@ void GPT_init(void) {
     INT_SYS_InstallHandler(FTM0_Ovf_Reload_IRQn, &ftmTimerISR, (isr_t*) 0U);
     INT_SYS_EnableIRQ(FTM0_Ovf_Reload_IRQn);
 
-    /* Setup the counter to trigger an interrupt every 100 ms */
+    /* Setup the counter to trigger an interrupt every 100 us */
     FTM_DRV_InitCounter(INST_FLEXTIMER_MC1, &flexTimer_mc1_TimerConfig);
     /* Start the counter */
     FTM_DRV_CounterStart(INST_FLEXTIMER_MC1);
@@ -136,10 +143,21 @@ void GPT_Reset1msVal(void) {
 *  Returns     : none
 *****************************************************************************/
 void TimerSet(uint32_t *STimer, uint32_t TimeLength) {
-    *STimer = GPT_Cntr1ms + TimeLength;
+    //*STimer = GPT_Cntr1ms + TimeLength;
+    *STimer = GPT_Cntr1ms + TimeLength * 10 ;
 
     if(*STimer == 0U) {
-        *STimer = 1U; //not set timer to 0 for timer is running
+        //*STimer = 1U; //not set timer to 0 for timer is running
+        *STimer = 10U; //not set timer to 0 for timer is running
+    }
+}
+
+void TimerSet100us(uint32_t *STimer, uint32_t TimeLength) {
+    *STimer = GPT_Cntr1ms + TimeLength/10 ;
+
+    if(*STimer == 0U) {
+        //*STimer = 1U; //not set timer to 0 for timer is running
+        *STimer = 10U; //not set timer to 0 for timer is running
     }
 }
 
@@ -175,7 +193,8 @@ uint8_t TimerHasStopped(uint32_t STimer) {
 *  Params      : STimer pointer to timer value
 *  Returns     :  TRUE if timer has expired or timer is stopped, otherwise FALSE
 *****************************************************************************/
-uint8_t TimerHasExpired (uint32_t *STimer) {
+inline uint8_t TimerHasExpired (uint32_t *STimer) {
+#if (0)
     if(*STimer == 0) {
         return (TRUE) ;
     }
@@ -183,6 +202,17 @@ uint8_t TimerHasExpired (uint32_t *STimer) {
         *STimer = 0;    //set timer to stop
         return (TRUE) ;
     }
+#else
+    int32_t     diff = (int32_t)(GPT_Cntr1ms) ;
+
+    diff = (int32_t)(diff - ((int32_t)(*STimer))) ;
+    if (*STimer == 0 || diff >= 0) {
+        //set timer to stop
+        *STimer = 0;
+
+        return (TRUE) ;
+    }   // if (*STimer == 0 || diff >= 0)
+#endif  // #if (0)
 
     return (FALSE) ;
 }

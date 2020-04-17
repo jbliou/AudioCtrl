@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "Uart.h"
+#include "extflash.h"
 
 #define __GPS_INS__
 #include "Gps.h"
@@ -36,6 +37,7 @@ void Handle_GPS(void) {
     else {
         gps_handle_state = GPS_HANDLE_STATE_INIT ;
     }
+    Handle_find_zip() ;
 }   // void Handle_GPS(void)
 
 void UartDataFilterByte (uint8_t rx_data) {
@@ -143,7 +145,7 @@ void Handle_GPS_GETDATA(void) {
         if (gps_rx_ready != 0xff) {
             gps_handle_state    = GPS_HANDLE_STATE_ANALYSIS ;
 #ifdef EVB
-            PINS_DRV_TogglePins(LED_RED_PORT, (1 << LED_RED));
+            //PINS_DRV_TogglePins(LED_RED_PORT, (1 << LED_RED));
 #endif  // #ifdef EVB
         }   // if (gps_rx_ready != 0xff)
     }   // if (ret_state == STATUS_SUCCESS)
@@ -268,6 +270,106 @@ void Handle_GPS_RESET (void) {
     gps_rx_ready = 0xff ;
     gps_handle_state = GPS_HANDLE_STATE_GETDATA ;
 #ifdef EVB
-    PINS_DRV_TogglePins(LED_RED_PORT, (1 << LED_RED));
+    //PINS_DRV_TogglePins(LED_RED_PORT, (1 << LED_RED));
 #endif  // #ifdef EVB
 }   // void Handle_GPS_FIND_TIME (void)
+
+void boundry_ready(void) {
+    if (flag_zip == 0xaa) {
+        geohash_boundry_m &= (uint32_t)(-256) ;
+        find_zip_state = ZIP_HANDLE_STATE_FIND_NEW_BOUNDRY ;
+    }   // if (flag_zip == 0xaa)
+    else {
+        find_zip_state = ZIP_HANDLE_STATE_LOAD_BOUNDRY ;
+    }   // if (flag_zip != 0xaa)
+}   // void boundry_ready(void)
+
+void zip_ready(void) {
+    if (flag_zip == 0xaa) {
+        find_zip_state = ZIP_HANDLE_STATE_GET_ZIP_DATA ;
+    }   // if (flag_zip == 0xaa)
+    else {
+        find_zip_state = ZIP_HANDLE_STATE_LOAD_ZIP_DATA ;
+    }   // if (flag_zip != 0xaa)
+}   // void zip_ready(void)
+
+void Handle_find_zip(void) {
+    uint32_t    tmp ;
+
+    switch (find_zip_state) {
+        case ZIP_HANDLE_STATE_WAIT :
+            if (get_extFlashConfig() == STATUS_SUCCESS) {
+                find_zip_state = ZIP_HANDLE_STATE_CHECK_NEW_GEOHASH ;
+            }   // if (get_extFlashConfig() == STATUS_SUCCESS)
+            break ;
+        case ZIP_HANDLE_STATE_CHECK_NEW_GEOHASH :
+            if (geohash_code != geohash_code_old) {
+                tmp = geohash_code & (uint32_t)(-256) ;
+                geohash_code_old = tmp ;
+                geohash_boundry_l = 0 ;
+                geohash_boundry_h = pconfig_table->root_records - 1 ;
+                geohash_boundry_m = pconfig_table->geohash_prefix_middle ;
+                find_zip_state = ZIP_HANDLE_STATE_FIND_NEW_BOUNDRY ;
+#ifdef EVB
+                //PINS_DRV_TogglePins(LED_RED_PORT, (1 << LED_RED));
+#endif  // #ifdef EVB
+            }   // if (geohash_code != geohash_code_old)
+            break ;
+        case ZIP_HANDLE_STATE_LOAD_BOUNDRY :
+            tmp = (geohash_boundry_h + geohash_boundry_l) / 2 ;
+            tmp <<= 2 ;
+            flag_zip = 0x01 ;
+            SPIFlash_Read_Req (pconfig_table->root_base_addr + tmp
+                              , (uint8_t *)&geohash_boundry_m
+                              , sizeof(uint32_t)
+                              , &flag_zip
+                              , boundry_ready
+                              ) ;
+            find_zip_state = ZIP_HANDLE_STATE_WAIT_LOADING_PROCESS ;
+            break ;
+        case ZIP_HANDLE_STATE_FIND_NEW_BOUNDRY :
+            tmp = (geohash_boundry_h + geohash_boundry_l) / 2 ;
+            if (geohash_code_old == geohash_boundry_m) {
+                geohash_code_old = geohash_code ;
+                find_zip_state = ZIP_HANDLE_STATE_LOAD_ZIP_DATA ;    // get
+            }
+            else {
+                if (geohash_boundry_h == geohash_boundry_l) {
+                    geohash_code_old = geohash_code ;
+                    find_zip_state = ZIP_HANDLE_STATE_CHECK_NEW_GEOHASH ;
+                }   // if (geohash_boundry_h == geohash_boundry_l)
+                else if (geohash_code_old > geohash_boundry_m) {
+                    geohash_boundry_l = tmp + 1 ;
+                }
+                else {
+                    geohash_boundry_h = tmp - 1 ;
+                }
+                find_zip_state = ZIP_HANDLE_STATE_LOAD_BOUNDRY ;
+            }
+            break ;
+        case ZIP_HANDLE_STATE_LOAD_ZIP_DATA :
+            tmp = (geohash_boundry_h + geohash_boundry_l) / 2 ;
+            tmp *= ZIP_BLOCK_SIZE ;
+            tmp += (geohash_code & 0xff) * 4 ;
+            flag_zip = 0x01 ;
+
+            SPIFlash_Read_Req (pconfig_table->zip_table_base + tmp
+                              , (uint8_t *)&zip_code
+                              , sizeof(uint32_t)
+                              , &flag_zip
+                              , zip_ready
+                              ) ;
+            find_zip_state = ZIP_HANDLE_STATE_WAIT_LOADING_PROCESS ;
+            break ;
+        case ZIP_HANDLE_STATE_GET_ZIP_DATA :
+            find_zip_state = ZIP_HANDLE_STATE_CHECK_NEW_GEOHASH ;
+#ifdef EVB
+            //PINS_DRV_TogglePins(LED_RED_PORT, (1 << LED_RED));
+#endif  // #ifdef EVB
+            break ;
+        case ZIP_HANDLE_STATE_WAIT_LOADING_PROCESS :
+            break ;
+        default :
+            break ;
+    }   // switch (find_zip_state)
+}

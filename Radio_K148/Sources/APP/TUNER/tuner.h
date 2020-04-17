@@ -9,10 +9,9 @@
     #define BSW_OBU_DEVICES_TUNER_TUNER_H_
 
     enum {
-        TUNER_STATE_INIT            = 0 ,
-        TUNER_STATE_GET_POWERON_STATE   ,
-        TUNER_STATE_CHECK_POWERON_STATE ,
-        TUNER_STATE_BOOT                ,
+        TUNER_STATE_INIT            = 0
+        , TUNER_STATE_STANDBY
+        , TUNER_STATE_IDLE
     };
     #if defined (__TUNER_INS__)
         uint32_t            tmr_tuner ;
